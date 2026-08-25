@@ -1,0 +1,33 @@
+# secrets and generated material (created by `make setup`)
+.env
+.env.*
+!.env.example
+wazuh/certs/
+wazuh/generated/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+*creds*.txt
+# runtime data and test output
+runtime/
+reports/
+# Python / tooling caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# editor / agent tool dirs
+.playwright-cli/
+.claude/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+# Terraform (not used here; kept for safety)
+.terraform/
+*.tfstate
+*.tfstate.*
