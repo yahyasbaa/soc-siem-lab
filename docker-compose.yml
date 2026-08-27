@@ -1,0 +1,241 @@
+# SOC & SIEM Security Monitoring Lab
+#
+# Single-node Wazuh SIEM (manager + indexer/OpenSearch + dashboard) plus four
+# lab "hosts" running the Wazuh agent and one Nginx web server.
+#
+# Network layout:
+#   soc-core   - SIEM components; host ports are published on 127.0.0.1 only.
+#   soc-hosts  - internal (no egress) network for the monitored lab hosts.
+#                The lab hosts cannot reach anything outside the lab.
+
+x-agent: &agent
+  image: wazuh/wazuh-agent:${WAZUH_VERSION}
+  restart: unless-stopped
+  networks: [soc-hosts]
+  depends_on:
+    wazuh.manager:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "grep -q \"status='connected'\" /var/ossec/var/run/wazuh-agentd.state"]
+    interval: 10s
+    timeout: 5s
+    retries: 30
+    start_period: 20s
+
+services:
+  # --- One-shot certificate generator (run by scripts/setup.sh) -------------
+  # Downloads wazuh-certs-tool.sh from packages.wazuh.com, so `make setup`
+  # needs Internet access once (as do the image pulls). The lab itself runs offline.
+  certs:
+    image: wazuh/wazuh-certs-generator:0.0.4
+    profiles: ["setup"]
+    environment:
+      - CERT_TOOL_VERSION=4.14
+    volumes:
+      - ./wazuh/certs/:/certificates/
+      - ./wazuh/certs.yml:/config/certs.yml:ro
+
+  # --- SIEM: storage / search (OpenSearch distribution) ---------------------
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:${WAZUH_VERSION}
+    hostname: wazuh.indexer
+    restart: unless-stopped
+    networks: [soc-core]
+    ports:
+      - "127.0.0.1:${INDEXER_PORT}:9200"
+    environment:
+      - OPENSEARCH_JAVA_OPTS=${INDEXER_JAVA_OPTS}
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65536, hard: 65536}
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - ./wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem:ro
+      - ./wazuh/certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh.indexer.key:ro
+      - ./wazuh/certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh.indexer.pem:ro
+      - ./wazuh/certs/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem:ro
+      - ./wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem:ro
+      - ./wazuh/indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml:ro
+      - ./wazuh/generated/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:9200/ | grep -qE '^(200|401)$'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # --- SIEM: collection, decoding, detection --------------------------------
+  wazuh.manager:
+    image: wazuh/wazuh-manager:${WAZUH_VERSION}
+    hostname: wazuh.manager
+    restart: unless-stopped
+    networks: [soc-core, soc-hosts]
+    ports:
+      - "127.0.0.1:${API_PORT}:55000"
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 655360, hard: 655360}
+    environment:
+      - INDEXER_URL=https://wazuh.indexer:9200
+      - INDEXER_USERNAME=${INDEXER_USERNAME}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD}
+      - FILEBEAT_SSL_VERIFICATION_MODE=full
+      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
+      - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
+      - SSL_KEY=/etc/ssl/filebeat.key
+      - API_USERNAME=${API_USERNAME}
+      - API_PASSWORD=${API_PASSWORD}
+    volumes:
+      - wazuh_api_configuration:/var/ossec/api/configuration
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+      - wazuh_var_multigroups:/var/ossec/var/multigroups
+      - wazuh_integrations:/var/ossec/integrations
+      - wazuh_active_response:/var/ossec/active-response/bin
+      - wazuh_agentless:/var/ossec/agentless
+      - wazuh_wodles:/var/ossec/wodles
+      - filebeat_etc:/etc/filebeat
+      - filebeat_var:/var/lib/filebeat
+      - ./wazuh/certs/root-ca-manager.pem:/etc/ssl/root-ca.pem:ro
+      - ./wazuh/certs/wazuh.manager.pem:/etc/ssl/filebeat.pem:ro
+      - ./wazuh/certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key:ro
+      # Copied into /var/ossec/etc on every start by the image entrypoint.
+      # Directories (not single files) are mounted so edits are always seen.
+      - ./wazuh/manager/etc:/wazuh-config-mount/etc:ro
+      - ./wazuh/entrypoint-scripts:/entrypoint-scripts:ro
+    depends_on:
+      wazuh.indexer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:55000/ | grep -q 401 && /var/ossec/bin/wazuh-control status | grep -q 'wazuh-analysisd is running'"]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 40s
+
+  # --- SIEM: analyst UI (OpenSearch Dashboards distribution) ----------------
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:${WAZUH_VERSION}
+    hostname: wazuh.dashboard
+    restart: unless-stopped
+    networks: [soc-core]
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT}:5601"
+    environment:
+      - INDEXER_USERNAME=${INDEXER_USERNAME}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD}
+      - WAZUH_API_URL=https://wazuh.manager
+      - DASHBOARD_USERNAME=${DASHBOARD_USERNAME}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
+      - API_USERNAME=${API_USERNAME}
+      - API_PASSWORD=${API_PASSWORD}
+    volumes:
+      - ./wazuh/certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
+      - ./wazuh/certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
+      - ./wazuh/certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
+      - ./wazuh/dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - ./wazuh/generated/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+      - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+      - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    depends_on:
+      wazuh.indexer:
+        condition: service_healthy
+      wazuh.manager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:5601/api/status | grep -qE '^(200|401)$'"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
+
+  # --- Monitored lab hosts ---------------------------------------------------
+  # Each host tails the files under runtime/hosts/<host>/, which receive both
+  # real service logs (Nginx) and deterministic synthetic security telemetry
+  # written by scripts/generate-test-events.
+
+  lab-linux-01:
+    <<: *agent
+    hostname: lab-linux-01
+    environment:
+      - WAZUH_MANAGER_SERVER=wazuh.manager
+      - WAZUH_AGENT_NAME=lab-linux-01
+      - WAZUH_AGENT_GROUP=default
+    volumes:
+      - ./agents/linux/config:/wazuh-config-mount/etc:ro
+      - ./runtime/hosts/lab-linux-01:/var/log/lab
+
+  lab-win-01:
+    <<: *agent
+    hostname: lab-win-01
+    environment:
+      - WAZUH_MANAGER_SERVER=wazuh.manager
+      - WAZUH_AGENT_NAME=lab-win-01
+      - WAZUH_AGENT_GROUP=default
+    volumes:
+      - ./agents/windows/config:/wazuh-config-mount/etc:ro
+      - ./agents/windows/eventchannel-forwarder.py:/usr/local/bin/eventchannel-forwarder.py:ro
+      - ./agents/windows/services/eventchannel-forwarder:/etc/services.d/eventchannel-forwarder
+      - ./runtime/hosts/lab-win-01:/var/log/lab
+
+  lab-web-01:
+    <<: *agent
+    hostname: lab-web-01
+    environment:
+      - WAZUH_MANAGER_SERVER=wazuh.manager
+      - WAZUH_AGENT_NAME=lab-web-01
+      - WAZUH_AGENT_GROUP=default
+    volumes:
+      - ./agents/web/config:/wazuh-config-mount/etc:ro
+      - ./runtime/hosts/lab-web-01:/var/log/lab
+
+  lab-nids-01:
+    <<: *agent
+    hostname: lab-nids-01
+    environment:
+      - WAZUH_MANAGER_SERVER=wazuh.manager
+      - WAZUH_AGENT_NAME=lab-nids-01
+      - WAZUH_AGENT_GROUP=default
+    volumes:
+      - ./agents/nids/config:/wazuh-config-mount/etc:ro
+      - ./runtime/hosts/lab-nids-01:/var/log/lab
+
+  # Real web server whose access/error logs are collected by lab-web-01
+  web-nginx:
+    image: ${NGINX_IMAGE}
+    hostname: web-nginx
+    restart: unless-stopped
+    networks: [soc-hosts]
+    volumes:
+      - ./web/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web/nginx/html:/usr/share/nginx/html:ro
+      - ./runtime/hosts/lab-web-01/nginx:/var/log/lab-nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  soc-core:
+    driver: bridge
+  soc-hosts:
+    driver: bridge
+    internal: true
+
+volumes:
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  wazuh-indexer-data:
+  wazuh-dashboard-config:
+  wazuh-dashboard-custom:
