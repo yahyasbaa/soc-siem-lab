@@ -1,0 +1,3 @@
+#!/usr/bin/with-contenv sh
+# s6 service: replay EventChannel records into the local Wazuh agent queue
+exec /usr/bin/python3 -u /usr/local/bin/eventchannel-forwarder.py
