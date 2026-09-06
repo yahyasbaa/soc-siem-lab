@@ -1,0 +1,45 @@
+{
+  "id": "config_windows_log_cleared",
+  "title": "Windows Security event log cleared",
+  "description": "Event 1102: the Security audit log was cleared.",
+  "host": "lab-win-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Eventlog",
+        "provider_guid": "{fc65ddd8-d6ef-4962-83d5-6e5cfe9ce148}",
+        "channel": "Security",
+        "process_id": 1100,
+        "task": 104,
+        "level": 4,
+        "keywords": "0x4020000000000000",
+        "event_id": 1102,
+        "data": {
+          "SubjectUserSid": "S-1-5-21-3623811015-3361044348-30300820-1104",
+          "SubjectUserName": "it-admin-dave-log",
+          "SubjectDomainName": "LAB",
+          "SubjectLogonId": "0x51c2a"
+        },
+        "message": "The audit log was cleared."
+      }
+    }
+  ],
+  "identity": {
+    "data.win.system.eventID": "1102"
+  },
+  "logtest": false,
+  "expect": [
+    {
+      "rule_id": "100190",
+      "level": 12,
+      "mitre": [
+        "T1070.001"
+      ],
+      "fields": {
+        "data.win.system.eventID": "1102"
+      }
+    }
+  ]
+}

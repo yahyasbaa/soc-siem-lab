@@ -1,0 +1,62 @@
+{
+  "id": "outbound_powershell_nonstandard_port",
+  "title": "PowerShell connects out on a non-standard port",
+  "description": "Sysmon network connection (event 3) from powershell.exe to an external host on TCP/4444.",
+  "host": "lab-win-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Sysmon",
+        "provider_guid": "{5770385f-c22a-43e0-bf4c-06f5698ffbd9}",
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "process_id": 2440,
+        "task": 3,
+        "version": 5,
+        "level": 4,
+        "keywords": "0x8000000000000000",
+        "event_id": 3,
+        "data": {
+          "RuleName": "-",
+          "UtcTime": "@@nginx_err_ts@@.000",
+          "ProcessGuid": "{4c1f3a2b-0004-6650-0000-0010a1b2c304}",
+          "ProcessId": "@@pid@@",
+          "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "User": "LAB\\jdoe",
+          "Protocol": "tcp",
+          "Initiated": "true",
+          "SourceIsIpv6": "false",
+          "SourceIp": "10.10.10.21",
+          "SourceHostname": "lab-win-01.lab.local",
+          "SourcePort": "50@@seq@@11",
+          "SourcePortName": "-",
+          "DestinationIsIpv6": "false",
+          "DestinationIp": "203.0.113.66",
+          "DestinationHostname": "-",
+          "DestinationPort": "4444",
+          "DestinationPortName": "-"
+        },
+        "message": "Network connection detected"
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.processGuid": "{4c1f3a2b-0004-6650-0000-0010a1b2c304}"
+  },
+  "logtest": false,
+  "expect": [
+    {
+      "rule_id": "100200",
+      "level": 12,
+      "mitre": [
+        "T1571",
+        "T1059.001"
+      ],
+      "fields": {
+        "data.win.eventdata.destinationIp": "203.0.113.66",
+        "data.win.eventdata.destinationPort": "4444"
+      }
+    }
+  ]
+}

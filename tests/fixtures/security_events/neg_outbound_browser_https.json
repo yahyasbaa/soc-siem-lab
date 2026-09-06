@@ -1,0 +1,51 @@
+{
+  "id": "neg_outbound_browser_https",
+  "title": "Benign: browser HTTPS connection",
+  "description": "chrome.exe connecting to a web server on 443 is expected.",
+  "host": "lab-win-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Sysmon",
+        "provider_guid": "{5770385f-c22a-43e0-bf4c-06f5698ffbd9}",
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "process_id": 2440,
+        "task": 3,
+        "version": 5,
+        "level": 4,
+        "keywords": "0x8000000000000000",
+        "event_id": 3,
+        "data": {
+          "RuleName": "-",
+          "UtcTime": "@@nginx_err_ts@@.000",
+          "ProcessGuid": "{4c1f3a2b-00fc-6650-0000-0010a1b2c3fc}",
+          "ProcessId": "@@pid@@",
+          "Image": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+          "User": "LAB\\jdoe",
+          "Protocol": "tcp",
+          "Initiated": "true",
+          "SourceIsIpv6": "false",
+          "SourceIp": "10.10.10.21",
+          "SourceHostname": "lab-win-01.lab.local",
+          "SourcePort": "50@@seq@@11",
+          "SourcePortName": "-",
+          "DestinationIsIpv6": "false",
+          "DestinationIp": "203.0.113.80",
+          "DestinationHostname": "-",
+          "DestinationPort": "443",
+          "DestinationPortName": "-"
+        },
+        "message": "Network connection detected"
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.processGuid": "{4c1f3a2b-00fc-6650-0000-0010a1b2c3fc}"
+  },
+  "logtest": false,
+  "forbid_rules": [
+    "100200"
+  ]
+}

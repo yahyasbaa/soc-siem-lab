@@ -1,0 +1,66 @@
+{
+  "id": "powershell_encoded_hidden",
+  "title": "PowerShell launched hidden with an encoded command",
+  "description": "Sysmon process creation for powershell.exe with -NoProfile -WindowStyle Hidden -EncodedCommand (payload decodes to a harmless Write-Output).",
+  "host": "lab-win-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Sysmon",
+        "provider_guid": "{5770385f-c22a-43e0-bf4c-06f5698ffbd9}",
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "process_id": 2440,
+        "task": 1,
+        "version": 5,
+        "level": 4,
+        "keywords": "0x8000000000000000",
+        "event_id": 1,
+        "data": {
+          "RuleName": "-",
+          "UtcTime": "@@nginx_err_ts@@.000",
+          "ProcessGuid": "{4c1f3a2b-0001-6650-0000-0010a1b2c301}",
+          "ProcessId": "@@pid@@",
+          "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "FileVersion": "10.0.19041.1",
+          "Description": "-",
+          "Product": "Microsoft® Windows® Operating System",
+          "Company": "Microsoft Corporation",
+          "OriginalFileName": "PowerShell.EXE",
+          "CommandLine": "powershell.exe -NoP -W Hidden -EncodedCommand VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAnAHMAbwBjAC0AbABhAGIAIABzAHkAbgB0AGgAZQB0AGkAYwAgAHQAZQBzAHQAJwA=",
+          "CurrentDirectory": "C:\\Users\\jdoe\\",
+          "User": "LAB\\jdoe",
+          "LogonGuid": "{4c1f3a2b-1111-6650-0000-0020e3a10900}",
+          "LogonId": "0x9a1e3",
+          "TerminalSessionId": "1",
+          "IntegrityLevel": "Medium",
+          "Hashes": "SHA256=0000000000000000000000000000000000000000000000000000000000000000",
+          "ParentProcessGuid": "{4c1f3a2b-2222-6650-0000-0010aa000000}",
+          "ParentProcessId": "4012",
+          "ParentImage": "C:\\Windows\\explorer.exe",
+          "ParentCommandLine": "C:\\Windows\\Explorer.EXE",
+          "ParentUser": "LAB\\jdoe"
+        },
+        "message": "Process Create"
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.processGuid": "{4c1f3a2b-0001-6650-0000-0010a1b2c301}"
+  },
+  "logtest": false,
+  "expect": [
+    {
+      "rule_id": "100131",
+      "level": 12,
+      "mitre": [
+        "T1059.001",
+        "T1027"
+      ],
+      "fields": {
+        "data.win.system.eventID": "1"
+      }
+    }
+  ]
+}

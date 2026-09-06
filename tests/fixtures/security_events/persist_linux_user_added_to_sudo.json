@@ -1,0 +1,35 @@
+{
+  "id": "persist_linux_user_added_to_sudo",
+  "title": "New local account added to the sudo group",
+  "description": "useradd creates svc-backup, then usermod adds it to the sudo group.",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 useradd[@@pid@@]: new user: name=svc-backup, UID=1005, GID=1005, home=/home/svc-backup, shell=/bin/bash, from=/dev/pts/0"
+    },
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 usermod[@@pid@@]: add 'svc-backup' to group 'sudo'"
+    }
+  ],
+  "identity": {
+    "data.dstuser": "svc-backup"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100180",
+      "level": 12,
+      "mitre": [
+        "T1098",
+        "T1136.001"
+      ],
+      "fields": {
+        "data.dstuser": "svc-backup",
+        "data.group": "sudo"
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "id": "neg_windows_single_logon_failure",
+  "title": "Benign: one Windows logon failure",
+  "description": "A single 4625 must not raise the multiple-failure rule.",
+  "host": "lab-win-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Security-Auditing",
+        "provider_guid": "{54849625-5478-4994-a5ba-3e3b0328c30d}",
+        "channel": "Security",
+        "process_id": 712,
+        "keywords": "0x8010000000000000",
+        "task": 12544,
+        "event_id": 4625,
+        "data": {
+          "SubjectUserSid": "S-1-0-0",
+          "SubjectUserName": "-",
+          "SubjectDomainName": "-",
+          "SubjectLogonId": "0x0",
+          "TargetUserSid": "S-1-0-0",
+          "TargetUserName": "jdoe",
+          "TargetDomainName": "LAB",
+          "Status": "0xc000006d",
+          "FailureReason": "%%2313",
+          "SubStatus": "0xc000006a",
+          "LogonType": "3",
+          "LogonProcessName": "NtLmSsp ",
+          "AuthenticationPackageName": "NTLM",
+          "WorkstationName": "WS-UNKNOWN",
+          "TransmittedServices": "-",
+          "LmPackageName": "-",
+          "KeyLength": "0",
+          "ProcessId": "0x0",
+          "ProcessName": "-",
+          "IpAddress": "198.51.100.79",
+          "IpPort": "0"
+        },
+        "message": "An account failed to log on."
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.ipAddress": "198.51.100.79"
+  },
+  "logtest": false,
+  "forbid_rules": [
+    "100111",
+    "100112"
+  ]
+}

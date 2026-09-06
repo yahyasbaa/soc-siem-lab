@@ -1,0 +1,106 @@
+{
+  "id": "auth_windows_success_after_failures",
+  "title": "Windows logon succeeds after repeated failures",
+  "description": "Five 4625 failures followed by a 4624 network logon for the same account from the same source.",
+  "host": "lab-win-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Security-Auditing",
+        "provider_guid": "{54849625-5478-4994-a5ba-3e3b0328c30d}",
+        "channel": "Security",
+        "process_id": 712,
+        "keywords": "0x8010000000000000",
+        "task": 12544,
+        "event_id": 4625,
+        "data": {
+          "SubjectUserSid": "S-1-0-0",
+          "SubjectUserName": "-",
+          "SubjectDomainName": "-",
+          "SubjectLogonId": "0x0",
+          "TargetUserSid": "S-1-0-0",
+          "TargetUserName": "svc-sql",
+          "TargetDomainName": "LAB",
+          "Status": "0xc000006d",
+          "FailureReason": "%%2313",
+          "SubStatus": "0xc000006a",
+          "LogonType": "3",
+          "LogonProcessName": "NtLmSsp ",
+          "AuthenticationPackageName": "NTLM",
+          "WorkstationName": "WS-UNKNOWN",
+          "TransmittedServices": "-",
+          "LmPackageName": "-",
+          "KeyLength": "0",
+          "ProcessId": "0x0",
+          "ProcessName": "-",
+          "IpAddress": "198.51.100.78",
+          "IpPort": "0"
+        },
+        "message": "An account failed to log on."
+      },
+      "repeat": 5
+    },
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Security-Auditing",
+        "provider_guid": "{54849625-5478-4994-a5ba-3e3b0328c30d}",
+        "channel": "Security",
+        "process_id": 712,
+        "task": 12544,
+        "event_id": 4624,
+        "data": {
+          "SubjectUserSid": "S-1-0-0",
+          "SubjectUserName": "-",
+          "SubjectDomainName": "-",
+          "SubjectLogonId": "0x0",
+          "TargetUserSid": "S-1-5-21-3623811015-3361044348-30300820-500",
+          "TargetUserName": "svc-sql",
+          "TargetDomainName": "LAB",
+          "TargetLogonId": "0x8a7f21",
+          "LogonType": "3",
+          "LogonProcessName": "NtLmSsp ",
+          "AuthenticationPackageName": "NTLM",
+          "WorkstationName": "WS-UNKNOWN",
+          "LogonGuid": "{00000000-0000-0000-0000-000000000000}",
+          "ProcessId": "0x0",
+          "ProcessName": "-",
+          "IpAddress": "198.51.100.78",
+          "IpPort": "0",
+          "ElevatedToken": "%%1842"
+        },
+        "message": "An account was successfully logged on."
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.ipAddress": "198.51.100.78"
+  },
+  "logtest": false,
+  "expect": [
+    {
+      "rule_id": "100111",
+      "level": 10,
+      "mitre": [
+        "T1110"
+      ],
+      "fields": {
+        "data.win.eventdata.ipAddress": "198.51.100.78"
+      }
+    },
+    {
+      "rule_id": "100112",
+      "level": 13,
+      "mitre": [
+        "T1110",
+        "T1078"
+      ],
+      "fields": {
+        "data.win.eventdata.ipAddress": "198.51.100.78",
+        "data.win.eventdata.targetUserName": "svc-sql"
+      }
+    }
+  ]
+}

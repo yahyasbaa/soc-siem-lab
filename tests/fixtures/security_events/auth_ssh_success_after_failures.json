@@ -1,0 +1,46 @@
+{
+  "id": "auth_ssh_success_after_failures",
+  "title": "SSH login succeeds after repeated failures",
+  "description": "Six failed SSH attempts followed by a successful password login from the same source (possible compromised account).",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sshd[@@pid@@]: Failed password for deploy from 198.51.100.24 port 5@@pid@@ ssh2",
+      "repeat": 6
+    },
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sshd[@@pid@@]: Accepted password for deploy from 198.51.100.24 port 5@@pid@@ ssh2"
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.24"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100101",
+      "level": 10,
+      "mitre": [
+        "T1110.001"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.24"
+      }
+    },
+    {
+      "rule_id": "100102",
+      "level": 13,
+      "mitre": [
+        "T1110",
+        "T1078"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.24",
+        "data.dstuser": "deploy"
+      }
+    }
+  ]
+}

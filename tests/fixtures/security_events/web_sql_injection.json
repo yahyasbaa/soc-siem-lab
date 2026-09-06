@@ -1,0 +1,29 @@
+{
+  "id": "web_sql_injection",
+  "title": "SQL injection attempt",
+  "description": "UNION-based SQL injection in a query string parameter.",
+  "host": "lab-web-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.124 - - [@@nginx_ts@@] \"GET /products.php?id=1%27%20UNION%20SELECT%20username,password%20FROM%20users--%20- HTTP/1.1\" 200 512 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.124"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100170",
+      "level": 12,
+      "mitre": [
+        "T1190"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.124"
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "web_unusual_http_method",
+  "title": "Unusual HTTP method (TRACE)",
+  "description": "A TRACE request, used to probe for cross-site tracing and proxy behaviour.",
+  "host": "lab-web-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.123 - - [@@nginx_ts@@] \"TRACE / HTTP/1.1\" 405 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.123"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100164",
+      "level": 5,
+      "mitre": [
+        "T1595.002"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.123",
+        "data.protocol": "TRACE"
+      }
+    }
+  ]
+}

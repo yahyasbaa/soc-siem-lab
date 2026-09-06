@@ -1,0 +1,25 @@
+{
+  "id": "neg_sudo_routine_admin",
+  "title": "Benign: routine sudo administration",
+  "description": "Package updates and service restarts through sudo must not trigger privilege-escalation or security-tampering rules.",
+  "host": "lab-linux-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sudo: ops-carol : TTY=pts/0 ; PWD=/home/ops-carol ; USER=root ; COMMAND=/usr/bin/apt update"
+    },
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sudo: ops-carol : TTY=pts/0 ; PWD=/home/ops-carol ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx"
+    }
+  ],
+  "identity": {
+    "data.srcuser": "ops-carol"
+  },
+  "logtest": true,
+  "forbid_rules": [
+    "100120",
+    "100193"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "id": "neg_web_normal_browsing",
+  "title": "Benign: normal website browsing",
+  "description": "Regular page, asset and favicon requests (including one 404).",
+  "host": "lab-web-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.140 - - [@@nginx_ts@@] \"GET / HTTP/1.1\" 200 612 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.140 - - [@@nginx_ts@@] \"GET /index.html HTTP/1.1\" 200 612 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.140 - - [@@nginx_ts@@] \"GET /favicon.ico HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.140 - - [@@nginx_ts@@] \"GET /css/site.css?v=1.2 HTTP/1.1\" 200 2048 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.140"
+  },
+  "logtest": true,
+  "forbid_rules": [
+    "100160",
+    "100161",
+    "100162",
+    "100163",
+    "100164",
+    "100170",
+    "100171",
+    "100172",
+    "100173",
+    "100175"
+  ]
+}

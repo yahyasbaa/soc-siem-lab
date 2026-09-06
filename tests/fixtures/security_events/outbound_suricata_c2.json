@@ -1,0 +1,51 @@
+{
+  "id": "outbound_suricata_c2",
+  "title": "Suricata detects command-and-control traffic from a lab host",
+  "description": "Outbound beacon from an internal host matched an ET MALWARE signature.",
+  "host": "lab-nids-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000032749,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "10.10.10.21",
+        "src_port": 50311,
+        "dest_ip": "203.0.113.66",
+        "dest_port": 8443,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2032749,
+          "rev": 3,
+          "signature": "ET MALWARE Possible Cobalt Strike Beacon Observed",
+          "category": "A Network Trojan was detected",
+          "severity": 1
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    }
+  ],
+  "identity": {
+    "data.src_ip": "10.10.10.21",
+    "data.dest_ip": "203.0.113.66"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100201",
+      "level": 12,
+      "mitre": [
+        "T1071.001"
+      ],
+      "fields": {
+        "data.src_ip": "10.10.10.21",
+        "data.dest_port": "8443"
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "web_scanner_user_agent",
+  "title": "Known vulnerability scanner user agent",
+  "description": "Requests carrying the sqlmap user agent string.",
+  "host": "lab-web-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.121 - - [@@nginx_ts@@] \"GET /robots.txt HTTP/1.1\" 404 153 \"-\" \"sqlmap/1.8.4#stable (https://sqlmap.org)\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.121"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100162",
+      "level": 8,
+      "mitre": [
+        "T1595.002"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.121"
+      }
+    }
+  ]
+}

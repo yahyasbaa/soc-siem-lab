@@ -1,0 +1,30 @@
+{
+  "id": "web_command_injection",
+  "title": "OS command injection attempt",
+  "description": "Shell metacharacters appended to a parameter to run `cat /etc/passwd`.",
+  "host": "lab-web-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.126 - - [@@nginx_ts@@] \"GET /cgi-bin/ping.cgi?host=127.0.0.1;cat%20/etc/passwd HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.126"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100172",
+      "level": 12,
+      "mitre": [
+        "T1190",
+        "T1059.004"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.126"
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "id": "config_defender_realtime_disabled",
+  "title": "Microsoft Defender real-time protection disabled",
+  "description": "Defender event 5001: real-time protection was turned off.",
+  "host": "lab-win-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Windows Defender",
+        "provider_guid": "{11cd958a-c507-4ef3-b3f2-5fd9dfbd2c78}",
+        "channel": "Microsoft-Windows-Windows Defender/Operational",
+        "process_id": 3300,
+        "level": 4,
+        "task": 0,
+        "event_id": 5001,
+        "data": {
+          "Product Name": "Microsoft Defender Antivirus",
+          "Product Version": "4.18.24090.11"
+        },
+        "message": "Microsoft Defender Antivirus Real-time Protection scanning for malware and other potentially unwanted software was disabled."
+      }
+    }
+  ],
+  "identity": {
+    "data.win.system.eventID": "5001"
+  },
+  "logtest": false,
+  "expect": [
+    {
+      "rule_id": "100192",
+      "level": 12,
+      "mitre": [
+        "T1562.001"
+      ],
+      "fields": {
+        "data.win.system.eventID": "5001"
+      }
+    }
+  ]
+}

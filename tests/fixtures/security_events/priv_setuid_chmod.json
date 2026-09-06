@@ -1,0 +1,31 @@
+{
+  "id": "priv_setuid_chmod",
+  "title": "SUID bit set on an interpreter/binary",
+  "description": "auditd records `chmod u+s /usr/bin/find`, a classic local privilege-escalation persistence trick.",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "audit",
+      "template": "type=SYSCALL msg=audit(@@audit_ts@@:@@audit_serial@@): arch=c000003e syscall=59 success=yes exit=0 a0=55d6c2a1 a1=55d6c2b0 a2=55d6c2c8 a3=0 items=2 ppid=1987 pid=@@pid@@ auid=1003 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=4 comm=\"chmod\" exe=\"/usr/bin/chmod\" key=\"perm_mod\"\ntype=EXECVE msg=audit(@@audit_ts@@:@@audit_serial@@): argc=3 a0=\"chmod\" a1=\"u+s\" a2=\"/usr/bin/find\""
+    }
+  ],
+  "identity": {
+    "data.audit.command": "chmod",
+    "data.audit.auid": "1003"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100122",
+      "level": 12,
+      "mitre": [
+        "T1548.001"
+      ],
+      "fields": {
+        "data.audit.exe": "/usr/bin/chmod",
+        "data.audit.auid": "1003"
+      }
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "id": "web_recon_sensitive_paths",
+  "title": "Web content discovery of sensitive files",
+  "description": "One client requests ten well-known sensitive paths (.env, .git, admin panels, backups) that all return 404/403.",
+  "host": "lab-web-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /.env HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /.git/config HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /wp-admin/ HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /phpmyadmin/ HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /server-status HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /backup.zip HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /config.php.bak HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /.aws/credentials HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /actuator/env HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    },
+    {
+      "source": "nginx_access",
+      "template": "198.51.100.120 - - [@@nginx_ts@@] \"GET /.DS_Store HTTP/1.1\" 404 153 \"-\" \"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.120"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100160",
+      "level": 6,
+      "mitre": [
+        "T1595.003"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.120"
+      }
+    },
+    {
+      "rule_id": "100161",
+      "level": 10,
+      "mitre": [
+        "T1595.003"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.120"
+      }
+    }
+  ]
+}

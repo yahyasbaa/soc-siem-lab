@@ -1,0 +1,31 @@
+{
+  "id": "priv_sudo_root_shell",
+  "title": "Interactive root shell obtained through sudo",
+  "description": "A regular user runs `sudo /bin/bash`, gaining an unrestricted root shell.",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sudo: dev-alice : TTY=pts/0 ; PWD=/home/dev-alice ; USER=root ; COMMAND=/bin/bash"
+    }
+  ],
+  "identity": {
+    "data.srcuser": "dev-alice"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100120",
+      "level": 10,
+      "mitre": [
+        "T1548.003"
+      ],
+      "fields": {
+        "data.srcuser": "dev-alice",
+        "data.dstuser": "root",
+        "data.command": "/bin/bash"
+      }
+    }
+  ]
+}

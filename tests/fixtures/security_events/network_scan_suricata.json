@@ -1,0 +1,180 @@
+{
+  "id": "network_scan_suricata",
+  "title": "Suricata reports a port scan from one source",
+  "description": "Six Suricata 'ET SCAN' alerts from the same external host against a lab server on different ports.",
+  "host": "lab-nids-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000001219,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "198.51.100.90",
+        "src_port": 40100,
+        "dest_ip": "10.10.10.11",
+        "dest_port": 22,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2001219,
+          "rev": 3,
+          "signature": "ET SCAN Potential SSH Scan",
+          "category": "Attempted Information Leak",
+          "severity": 2
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    },
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000010937,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "198.51.100.90",
+        "src_port": 40101,
+        "dest_ip": "10.10.10.11",
+        "dest_port": 3306,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2010937,
+          "rev": 3,
+          "signature": "ET SCAN Suspicious inbound to mySQL port 3306",
+          "category": "Attempted Information Leak",
+          "severity": 2
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    },
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000010935,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "198.51.100.90",
+        "src_port": 40102,
+        "dest_ip": "10.10.10.11",
+        "dest_port": 1433,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2010935,
+          "rev": 3,
+          "signature": "ET SCAN Suspicious inbound to MSSQL port 1433",
+          "category": "Attempted Information Leak",
+          "severity": 2
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    },
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000010939,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "198.51.100.90",
+        "src_port": 40103,
+        "dest_ip": "10.10.10.11",
+        "dest_port": 5432,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2010939,
+          "rev": 3,
+          "signature": "ET SCAN Suspicious inbound to PostgreSQL port 5432",
+          "category": "Attempted Information Leak",
+          "severity": 2
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    },
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000002911,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "198.51.100.90",
+        "src_port": 40104,
+        "dest_ip": "10.10.10.11",
+        "dest_port": 5900,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2002911,
+          "rev": 3,
+          "signature": "ET SCAN Potential VNC Scan 5900-5920",
+          "category": "Attempted Information Leak",
+          "severity": 2
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    },
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000001569,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "198.51.100.90",
+        "src_port": 40105,
+        "dest_ip": "10.10.10.11",
+        "dest_port": 3389,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2001569,
+          "rev": 3,
+          "signature": "ET SCAN Behavioral Unusual Port 3389 traffic Potential Scan",
+          "category": "Attempted Information Leak",
+          "severity": 2
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    }
+  ],
+  "identity": {
+    "data.src_ip": "198.51.100.90"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100150",
+      "level": 8,
+      "mitre": [
+        "T1046"
+      ],
+      "fields": {
+        "data.src_ip": "198.51.100.90",
+        "data.dest_ip": "10.10.10.11"
+      }
+    },
+    {
+      "rule_id": "100151",
+      "level": 12,
+      "mitre": [
+        "T1046"
+      ],
+      "fields": {
+        "data.src_ip": "198.51.100.90"
+      }
+    }
+  ]
+}

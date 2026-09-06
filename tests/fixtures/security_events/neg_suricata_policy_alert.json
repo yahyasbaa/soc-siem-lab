@@ -1,0 +1,42 @@
+{
+  "id": "neg_suricata_policy_alert",
+  "title": "Benign: informational Suricata policy alert",
+  "description": "An inbound ET POLICY alert is not reconnaissance or C2.",
+  "host": "lab-nids-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "eve",
+      "eve": {
+        "flow_id": 1840000013028,
+        "in_iface": "eth0",
+        "event_type": "alert",
+        "src_ip": "198.51.100.150",
+        "src_port": 51515,
+        "dest_ip": "10.10.10.31",
+        "dest_port": 80,
+        "proto": "TCP",
+        "alert": {
+          "action": "allowed",
+          "gid": 1,
+          "signature_id": 2013028,
+          "rev": 3,
+          "signature": "ET POLICY curl User-Agent Outbound",
+          "category": "Attempted Information Leak",
+          "severity": 3
+        },
+        "app_proto": "failed",
+        "host": "lab-nids-01"
+      }
+    }
+  ],
+  "identity": {
+    "data.src_ip": "198.51.100.150"
+  },
+  "logtest": true,
+  "forbid_rules": [
+    "100150",
+    "100151",
+    "100201"
+  ]
+}

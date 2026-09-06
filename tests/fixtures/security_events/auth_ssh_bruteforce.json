@@ -1,0 +1,41 @@
+{
+  "id": "auth_ssh_bruteforce",
+  "title": "SSH password brute force against root",
+  "description": "Eight failed SSH password attempts for root from one external source within seconds.",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sshd[@@pid@@]: Failed password for root from 198.51.100.23 port 5@@pid@@ ssh2",
+      "repeat": 8
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.23"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100100",
+      "level": 5,
+      "mitre": [
+        "T1110.001"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.23",
+        "data.dstuser": "root"
+      }
+    },
+    {
+      "rule_id": "100101",
+      "level": 10,
+      "mitre": [
+        "T1110.001"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.23"
+      }
+    }
+  ]
+}

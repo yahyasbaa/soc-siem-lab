@@ -1,0 +1,87 @@
+{
+  "id": "persist_windows_admin_account",
+  "title": "New Windows account added to local Administrators",
+  "description": "A new local account (4720) is created and immediately added to BUILTIN\\Administrators (4732).",
+  "host": "lab-win-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Security-Auditing",
+        "provider_guid": "{54849625-5478-4994-a5ba-3e3b0328c30d}",
+        "channel": "Security",
+        "process_id": 712,
+        "task": 13824,
+        "event_id": 4720,
+        "data": {
+          "SubjectUserSid": "S-1-5-21-3623811015-3361044348-30300820-1104",
+          "SubjectUserName": "it-admin-dave",
+          "SubjectDomainName": "LAB",
+          "SubjectLogonId": "0x51c2a",
+          "TargetUserName": "helpdesk-tmp",
+          "TargetDomainName": "LAB-WIN-01",
+          "TargetSid": "S-1-5-21-3623811015-3361044348-30300820-1107",
+          "PrivilegeList": "-",
+          "SamAccountName": "helpdesk-tmp",
+          "DisplayName": "%%1793",
+          "UserPrincipalName": "-",
+          "HomeDirectory": "%%1793",
+          "UserAccountControl": "%%2080 %%2082 %%2084"
+        },
+        "message": "A user account was created."
+      }
+    },
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-Security-Auditing",
+        "provider_guid": "{54849625-5478-4994-a5ba-3e3b0328c30d}",
+        "channel": "Security",
+        "process_id": 712,
+        "task": 13826,
+        "event_id": 4732,
+        "data": {
+          "SubjectUserSid": "S-1-5-21-3623811015-3361044348-30300820-1104",
+          "SubjectUserName": "it-admin-dave",
+          "SubjectDomainName": "LAB",
+          "SubjectLogonId": "0x51c2a",
+          "MemberName": "-",
+          "MemberSid": "S-1-5-21-3623811015-3361044348-30300820-1107",
+          "TargetUserName": "Administrators",
+          "TargetDomainName": "Builtin",
+          "TargetSid": "S-1-5-32-544",
+          "PrivilegeList": "-"
+        },
+        "message": "A member was added to a security-enabled local group."
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.subjectUserName": "it-admin-dave"
+  },
+  "logtest": false,
+  "expect": [
+    {
+      "rule_id": "100183",
+      "level": 8,
+      "mitre": [
+        "T1136.001"
+      ],
+      "fields": {
+        "data.win.eventdata.targetUserName": "helpdesk-tmp"
+      }
+    },
+    {
+      "rule_id": "100182",
+      "level": 12,
+      "mitre": [
+        "T1098"
+      ],
+      "fields": {
+        "data.win.eventdata.targetSid": "S-1-5-32-544",
+        "data.win.eventdata.memberSid": "S-1-5-21-3623811015-3361044348-30300820-1107"
+      }
+    }
+  ]
+}

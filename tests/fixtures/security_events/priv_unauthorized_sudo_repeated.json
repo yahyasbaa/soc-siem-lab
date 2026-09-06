@@ -1,0 +1,30 @@
+{
+  "id": "priv_unauthorized_sudo_repeated",
+  "title": "Repeated sudo attempts by a user not in sudoers",
+  "description": "A user without sudo rights tries four times to read /etc/shadow through sudo.",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sudo: intern-bob : user NOT in sudoers ; TTY=pts/0 ; PWD=/home/intern-bob ; USER=root ; COMMAND=/bin/cat /etc/shadow",
+      "repeat": 4
+    }
+  ],
+  "identity": {
+    "data.srcuser": "intern-bob"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100121",
+      "level": 10,
+      "mitre": [
+        "T1548.003"
+      ],
+      "fields": {
+        "data.srcuser": "intern-bob"
+      }
+    }
+  ]
+}

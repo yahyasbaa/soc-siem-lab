@@ -1,0 +1,38 @@
+{
+  "id": "neg_powershell_scriptblock_benign",
+  "title": "Benign: administrative PowerShell script block",
+  "description": "Get-Process pipeline captured by script block logging.",
+  "host": "lab-win-01",
+  "kind": "negative",
+  "events": [
+    {
+      "source": "eventchannel",
+      "win": {
+        "provider": "Microsoft-Windows-PowerShell",
+        "provider_guid": "{a0c1853b-5c40-4b15-8766-3cf1c58f985a}",
+        "channel": "Microsoft-Windows-PowerShell/Operational",
+        "process_id": 5120,
+        "level": 5,
+        "task": 2,
+        "keywords": "0x0",
+        "event_id": 4104,
+        "data": {
+          "MessageNumber": "1",
+          "MessageTotal": "1",
+          "ScriptBlockText": "Get-Process | Sort-Object CPU -Descending | Select-Object -First 10",
+          "ScriptBlockId": "{6d1f0c5e-0b6e-4b8a-9d61-0a1b2c3d4eff}",
+          "Path": ""
+        },
+        "message": "Creating Scriptblock text (1 of 1)"
+      }
+    }
+  ],
+  "identity": {
+    "data.win.eventdata.scriptBlockId": "{6d1f0c5e-0b6e-4b8a-9d61-0a1b2c3d4eff}"
+  },
+  "logtest": false,
+  "forbid_rules": [
+    "100130",
+    "100132"
+  ]
+}

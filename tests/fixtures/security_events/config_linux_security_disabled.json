@@ -1,0 +1,34 @@
+{
+  "id": "config_linux_security_disabled",
+  "title": "Host firewall and audit daemon disabled via sudo",
+  "description": "An operator disables ufw and stops auditd.",
+  "host": "lab-linux-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sudo: ops-erin : TTY=pts/0 ; PWD=/home/ops-erin ; USER=root ; COMMAND=/usr/sbin/ufw disable"
+    },
+    {
+      "source": "auth",
+      "template": "@@syslog_ts@@ lab-linux-01 sudo: ops-erin : TTY=pts/0 ; PWD=/home/ops-erin ; USER=root ; COMMAND=/usr/bin/systemctl stop auditd"
+    }
+  ],
+  "identity": {
+    "data.srcuser": "ops-erin"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100193",
+      "level": 12,
+      "mitre": [
+        "T1562.001",
+        "T1562.004"
+      ],
+      "fields": {
+        "data.srcuser": "ops-erin"
+      }
+    }
+  ]
+}

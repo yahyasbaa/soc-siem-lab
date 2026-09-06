@@ -1,0 +1,29 @@
+{
+  "id": "web_forbidden_hidden_file",
+  "title": "Blocked access to a hidden repository file (Nginx error log)",
+  "description": "Nginx error log reports 'access forbidden by rule' for /.git/config.",
+  "host": "lab-web-01",
+  "kind": "positive",
+  "events": [
+    {
+      "source": "nginx_error",
+      "template": "@@nginx_err_ts@@ [error] 29#29: *@@seq@@ access forbidden by rule, client: 198.51.100.128, server: lab-web-01, request: \"GET /.git/config HTTP/1.1\", host: \"lab-web-01\""
+    }
+  ],
+  "identity": {
+    "data.srcip": "198.51.100.128"
+  },
+  "logtest": true,
+  "expect": [
+    {
+      "rule_id": "100175",
+      "level": 6,
+      "mitre": [
+        "T1595.003"
+      ],
+      "fields": {
+        "data.srcip": "198.51.100.128"
+      }
+    }
+  ]
+}
