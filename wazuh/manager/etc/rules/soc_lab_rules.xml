@@ -1,0 +1,439 @@
+<!--
+  SOC & SIEM Security Monitoring Lab - detection rules (IDs 100090-100299)
+
+  Source of truth for metadata (severity, data source, FP notes, response,
+  test fixture) is detections/catalog.yml; tests/detection/test_catalog.py
+  keeps this file and the catalog consistent.
+
+  Wazuh level -> SOC severity:  0-6 low | 7-11 medium | 12-14 high | 15 critical
+
+  Design notes
+  * Custom rules attach to stock rule *groups* (if_group) where possible, so
+    they are evaluated no matter which stock leaf rule matched first.
+  * Within a parent, the first matching child wins: higher-severity rules are
+    listed before broader ones.
+  * Correlation rules use frequency/timeframe with same_srcip / same_field.
+-->
+
+<!-- ===================================================================== -->
+<!-- Pipeline health (not detections)                                       -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_health,">
+
+  <rule id="100090" level="3">
+    <decoded_as>soc-lab-heartbeat</decoded_as>
+    <description>SOC lab pipeline heartbeat from $(lab_host) (nonce $(nonce))</description>
+  </rule>
+
+  <rule id="100091" level="3">
+    <if_group>accesslog</if_group>
+    <url>^/soc-lab-heartbeat</url>
+    <description>SOC lab web heartbeat request served by Nginx</description>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- Authentication abuse                                                   -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_auth,">
+
+  <!-- SOC-AUTH-001 -->
+  <rule id="100100" level="5">
+    <if_group>sshd</if_group>
+    <match>Failed password|Failed publickey|Invalid user|authentication failure</match>
+    <description>SSH authentication failure for $(dstuser) from $(srcip)</description>
+    <mitre><id>T1110.001</id></mitre>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <!-- SOC-AUTH-002 -->
+  <rule id="100101" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100100</if_matched_sid>
+    <same_srcip />
+    <description>SSH brute force: repeated authentication failures from $(srcip)</description>
+    <mitre><id>T1110.001</id></mitre>
+    <group>authentication_failures,soc_correlation,</group>
+  </rule>
+
+  <!-- SOC-AUTH-003 -->
+  <rule id="100102" level="13" timeframe="600">
+    <if_group>sshd</if_group>
+    <match>Accepted password|Accepted publickey|Accepted keyboard-interactive</match>
+    <if_matched_sid>100101</if_matched_sid>
+    <same_srcip />
+    <description>SSH login for $(dstuser) succeeded from $(srcip) after a brute-force burst</description>
+    <mitre><id>T1110</id><id>T1078</id></mitre>
+    <group>authentication_success,soc_correlation,</group>
+  </rule>
+
+  <!-- SOC-AUTH-004 -->
+  <rule id="100110" level="5">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Security$</field>
+    <field name="win.system.eventID">^4625$</field>
+    <description>Windows logon failure for $(win.eventdata.targetUserName) from $(win.eventdata.ipAddress)</description>
+    <mitre><id>T1110</id></mitre>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <!-- SOC-AUTH-005 -->
+  <rule id="100111" level="10" frequency="4" timeframe="120">
+    <if_matched_sid>100110</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <description>Multiple Windows logon failures from $(win.eventdata.ipAddress)</description>
+    <mitre><id>T1110</id></mitre>
+    <group>authentication_failures,soc_correlation,</group>
+  </rule>
+
+  <!-- SOC-AUTH-006 -->
+  <rule id="100112" level="13" timeframe="600">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Security$</field>
+    <field name="win.system.eventID">^4624$</field>
+    <if_matched_sid>100111</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <description>Windows logon for $(win.eventdata.targetUserName) succeeded from $(win.eventdata.ipAddress) after repeated failures</description>
+    <mitre><id>T1110</id><id>T1078</id></mitre>
+    <group>authentication_success,soc_correlation,</group>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- Privilege escalation                                                   -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_privilege,">
+
+  <!-- SOC-PRIV-001 -->
+  <rule id="100120" level="10">
+    <if_group>sudo</if_group>
+    <regex type="pcre2">; USER=root ;</regex>
+    <field name="command" type="pcre2">^(/usr)?/bin/(ba|da|z|k|tc|c|fi)?sh$|^(/usr)?/bin/su(\s+-\s*\w*|\s+root)?$</field>
+    <description>Interactive root shell obtained via sudo by $(srcuser) ($(command))</description>
+    <mitre><id>T1548.003</id></mitre>
+  </rule>
+
+  <!-- SOC-CONF-004 is evaluated in the same parent: security tooling disabled via sudo -->
+  <rule id="100193" level="12">
+    <if_group>sudo</if_group>
+    <field name="command" type="pcre2">(?i)(ufw\s+disable|setenforce\s+0|iptables\s+-F|nft\s+flush\s+ruleset|auditctl\s+-(D|e\s*0)|systemctl\s+(stop|disable|mask)\s+(auditd|apparmor|firewalld|ufw|wazuh-agent|rsyslog|suricata)|service\s+(auditd|apparmor|firewalld|wazuh-agent|rsyslog)\s+stop)</field>
+    <description>Security control disabled via sudo by $(srcuser): $(command)</description>
+    <mitre><id>T1562.001</id><id>T1562.004</id></mitre>
+    <group>soc_config,</group>
+  </rule>
+
+  <!-- SOC-PRIV-002 -->
+  <rule id="100121" level="10" frequency="3" timeframe="300">
+    <if_matched_sid>5405</if_matched_sid>
+    <same_srcuser />
+    <description>Repeated sudo attempts by $(srcuser), who is not in sudoers</description>
+    <mitre><id>T1548.003</id></mitre>
+    <group>soc_correlation,</group>
+  </rule>
+
+  <!-- SOC-PRIV-003 -->
+  <rule id="100122" level="12">
+    <if_group>audit</if_group>
+    <field name="audit.command">^chmod$</field>
+    <regex type="pcre2">type=EXECVE.* a\d+="(?:[ugoa]*\+[rwxt]*s[rwxt]*|0?[2-7][0-7]{3})"</regex>
+    <description>SUID/SGID bit set by auid $(audit.auid) via chmod</description>
+    <mitre><id>T1548.001</id></mitre>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- Persistence: new administrative account                                -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_persistence,">
+
+  <!-- SOC-PERS-001 -->
+  <rule id="100180" level="12">
+    <decoded_as>soc-usermod</decoded_as>
+    <field name="group" type="pcre2">^(sudo|wheel|admin|adm|root|docker|lxd)$</field>
+    <description>Account $(dstuser) added to privileged group $(group)</description>
+    <mitre><id>T1098</id><id>T1136.001</id></mitre>
+    <group>account_changed,</group>
+  </rule>
+
+  <!-- SOC-PERS-002 -->
+  <rule id="100182" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Security$</field>
+    <field name="win.system.eventID" type="pcre2">^(4732|4728|4756)$</field>
+    <field name="win.eventdata.targetSid" type="pcre2">^S-1-5-32-544$|-51[289]$</field>
+    <description>Account $(win.eventdata.memberSid) added to privileged group $(win.eventdata.targetUserName) by $(win.eventdata.subjectUserName)</description>
+    <mitre><id>T1098</id></mitre>
+    <group>account_changed,group_changed,</group>
+  </rule>
+
+  <!-- SOC-PERS-003 -->
+  <rule id="100183" level="8">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Security$</field>
+    <field name="win.system.eventID">^4720$</field>
+    <description>New Windows account $(win.eventdata.targetUserName) created by $(win.eventdata.subjectUserName)</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>adduser,account_changed,</group>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- PowerShell                                                             -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_powershell,">
+
+  <!-- SOC-PS-003 (before SOC-PS-001: more specific, higher severity) -->
+  <rule id="100132" level="14">
+    <if_group>powershell</if_group>
+    <field name="win.system.eventID">^4104$</field>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?i)(Set-MpPreference\b.*-Disable(RealtimeMonitoring|IOAVProtection|BehaviorMonitoring|ScriptScanning|IntrusionPreventionSystem)|Add-MpPreference\b.*-Exclusion(Path|Process|Extension)|AmsiUtils|amsiInitFailed)</field>
+    <description>PowerShell tampering with Microsoft Defender / AMSI</description>
+    <mitre><id>T1562.001</id><id>T1059.001</id></mitre>
+    <group>soc_config,</group>
+  </rule>
+
+  <!-- SOC-PS-001 -->
+  <rule id="100130" level="12">
+    <if_group>powershell</if_group>
+    <field name="win.system.eventID">^4104$</field>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?i)^(?=.*\b(IEX|Invoke-Expression)\b)(?=.*(DownloadString|DownloadFile|DownloadData|Net\.WebClient|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|\biwr\b|\birm\b))</field>
+    <description>PowerShell download cradle (download and execute) in script block</description>
+    <mitre><id>T1059.001</id><id>T1105</id></mitre>
+  </rule>
+
+  <!-- SOC-PS-002 -->
+  <rule id="100131" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Microsoft-Windows-Sysmon/Operational$</field>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\s-e(nc(odedcommand)?|c)?\s+[A-Za-z0-9+/=]{16,}|\s-w(indowstyle)?\s+hidden\b</field>
+    <description>PowerShell started hidden and/or with an encoded command by $(win.eventdata.user)</description>
+    <mitre><id>T1059.001</id><id>T1027</id></mitre>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- Suspicious process execution                                           -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_process,">
+
+  <!-- SOC-PROC-001 -->
+  <rule id="100140" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Microsoft-Windows-Sysmon/Operational$</field>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(certutil|bitsadmin)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)[-/](urlcache|verifyctl|transfer|addfile)\b</field>
+    <description>LOLBin used to download a remote file: $(win.eventdata.commandLine)</description>
+    <mitre><id>T1105</id><id>T1218</id></mitre>
+  </rule>
+
+  <!-- SOC-PROC-002 -->
+  <rule id="100141" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Microsoft-Windows-Sysmon/Operational$</field>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\(winword|excel|powerpnt|outlook|msaccess|mspub|onenote)\.exe$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(cmd|powershell|pwsh|wscript|cscript|mshta|rundll32|regsvr32)\.exe$</field>
+    <description>Office application spawned a shell/script host: $(win.eventdata.commandLine)</description>
+    <mitre><id>T1204.002</id><id>T1059.003</id></mitre>
+  </rule>
+
+  <!-- SOC-PROC-003 -->
+  <rule id="100142" level="12">
+    <if_group>audit</if_group>
+    <field name="audit.command" type="pcre2">^(nc|ncat|netcat|nc\.traditional|nc\.openbsd)$</field>
+    <regex type="pcre2">type=EXECVE.* a\d+="-[a-z]*[ec]"</regex>
+    <description>Netcat executed with -e/-c (reverse/bind shell) by auid $(audit.auid)</description>
+    <mitre><id>T1059.004</id></mitre>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- Network reconnaissance and outbound connections (Suricata, Sysmon)     -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_network,">
+
+  <!-- SOC-OUT-002 -->
+  <rule id="100201" level="12">
+    <if_group>suricata</if_group>
+    <field name="event_type">^alert$</field>
+    <field name="alert.signature" type="pcre2">^ET (MALWARE|CNC|TROJAN|ATTACK_RESPONSE) |^ETPRO (MALWARE|CNC|TROJAN) </field>
+    <field name="src_ip" type="pcre2">^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)</field>
+    <description>Outbound command-and-control traffic from $(src_ip) to $(dest_ip):$(dest_port) - $(alert.signature)</description>
+    <mitre><id>T1071.001</id></mitre>
+    <group>soc_outbound,</group>
+  </rule>
+
+  <!-- SOC-NET-001 -->
+  <rule id="100150" level="8">
+    <if_group>suricata</if_group>
+    <field name="event_type">^alert$</field>
+    <field name="alert.signature" type="pcre2">^ET SCAN </field>
+    <description>Network scan detected by Suricata from $(src_ip) to $(dest_ip):$(dest_port)</description>
+    <mitre><id>T1046</id></mitre>
+  </rule>
+
+  <!-- SOC-NET-002 -->
+  <rule id="100151" level="12" frequency="4" timeframe="120">
+    <if_matched_sid>100150</if_matched_sid>
+    <same_field>src_ip</same_field>
+    <description>Port scan: multiple Suricata scan alerts from $(src_ip)</description>
+    <mitre><id>T1046</id></mitre>
+    <group>soc_correlation,</group>
+  </rule>
+
+  <!-- SOC-OUT-001 -->
+  <rule id="100200" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Microsoft-Windows-Sysmon/Operational$</field>
+    <field name="win.system.eventID">^3$</field>
+    <field name="win.eventdata.initiated">^true$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(powershell|pwsh|rundll32|regsvr32|mshta|wscript|cscript|certutil|bitsadmin|msbuild|installutil)\.exe$</field>
+    <field name="win.eventdata.destinationPort" type="pcre2">^(?!(80|443|53|8080|8443)$)\d+$</field>
+    <field name="win.eventdata.destinationIp" type="pcre2">^(?!(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.))</field>
+    <description>$(win.eventdata.image) connected out to $(win.eventdata.destinationIp):$(win.eventdata.destinationPort) on a non-standard port</description>
+    <mitre><id>T1571</id><id>T1059.001</id></mitre>
+    <group>soc_outbound,</group>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- Web: attacks, suspicious requests, reconnaissance (Nginx)              -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_web,">
+
+  <!-- SOC-WEB-007 -->
+  <rule id="100173" level="14">
+    <if_group>accesslog</if_group>
+    <regex type="pcre2">(?i)\$\{(jndi|\$\{lower:j\}|\$\{::-j\})</regex>
+    <description>Log4Shell JNDI lookup injection attempt from $(srcip)</description>
+    <mitre><id>T1190</id></mitre>
+    <group>attack,</group>
+  </rule>
+
+  <!-- SOC-WEB-004 -->
+  <rule id="100170" level="12">
+    <if_group>accesslog</if_group>
+    <url type="pcre2">(?i)(union(\s|%20|\+|/\*.*\*/)+(all(\s|%20|\+)+)?select|(%27|')(\s|%20|\+)*(or|and)(\s|%20|\+)+\d+(\s|%20|\+)*=(\s|%20|\+)*\d+|information_schema|sleep(\s|%20)*\(\s*\d+\s*\)|benchmark\(|waitfor(\s|%20)+delay|xp_cmdshell)</url>
+    <description>SQL injection attempt from $(srcip): $(url)</description>
+    <mitre><id>T1190</id></mitre>
+    <group>attack,</group>
+  </rule>
+
+  <!-- SOC-WEB-006 -->
+  <rule id="100172" level="12">
+    <if_group>accesslog</if_group>
+    <url type="pcre2">(?i)(;|%3B|\||%7C|`|%60|\$\(|%24%28)(\s|%20|\+)*(cat|id|whoami|uname|wget|curl|nc|bash|sh|ping|nslookup)(\s|%20|\+|$|&amp;)</url>
+    <description>OS command injection attempt from $(srcip): $(url)</description>
+    <mitre><id>T1190</id><id>T1059.004</id></mitre>
+    <group>attack,</group>
+  </rule>
+
+  <!-- SOC-WEB-003 -->
+  <rule id="100163" level="10">
+    <if_group>accesslog</if_group>
+    <url type="pcre2">(?i)(\.\./|\.\.%2f|%2e%2e(/|%2f)|\.\.\\|%2e%2e%5c)|/etc/(passwd|shadow|hosts)|(boot|win)\.ini|/proc/self/environ</url>
+    <description>Path traversal / local file inclusion attempt from $(srcip): $(url)</description>
+    <mitre><id>T1190</id><id>T1083</id></mitre>
+    <group>attack,</group>
+  </rule>
+
+  <!-- SOC-WEB-005 -->
+  <rule id="100171" level="10">
+    <if_group>accesslog</if_group>
+    <url type="pcre2">(?i)(&lt;|%3C)(\s|%20)*(script|img|svg|iframe|body)\b|javascript(:|%3A)|on(error|load|mouseover)(\s|%20)*(=|%3D)|document\.cookie</url>
+    <description>Cross-site scripting attempt from $(srcip): $(url)</description>
+    <mitre><id>T1190</id><id>T1059.007</id></mitre>
+    <group>attack,</group>
+  </rule>
+
+  <!-- SOC-WEB-002 -->
+  <rule id="100162" level="8">
+    <if_group>accesslog</if_group>
+    <regex type="pcre2">(?i)"[^"]*(sqlmap|nikto|nmap scripting engine|nuclei|gobuster|dirbuster|feroxbuster|ffuf|wpscan|masscan|zgrab|acunetix|nessus|openvas|w3af|hydra)[^"]*"$</regex>
+    <description>Known vulnerability scanner user agent from $(srcip)</description>
+    <mitre><id>T1595.002</id></mitre>
+    <group>recon,</group>
+  </rule>
+
+  <!-- SOC-WEB-001 -->
+  <rule id="100160" level="6">
+    <if_group>accesslog</if_group>
+    <url type="pcre2">(?i)^/(\.env|\.git/|\.svn/|\.hg/|\.aws/|\.ssh/|\.DS_Store|\.htpasswd|\.htaccess|wp-admin|wp-login\.php|xmlrpc\.php|phpmyadmin|pma/|myadmin|server-status|server-info|actuator|manager/html|administrator|admin/|[^?]*\.(bak|old|orig|swp|sql|sqlite|zip|tar|tar\.gz|tgz|7z|rar)$|config\.php|web\.config|backup)</url>
+    <description>Request for sensitive/admin path from $(srcip): $(url)</description>
+    <mitre><id>T1595.003</id></mitre>
+    <group>recon,</group>
+  </rule>
+
+  <!-- SOC-WEB-001b (correlation) -->
+  <rule id="100161" level="10" frequency="6" timeframe="60">
+    <if_matched_sid>100160</if_matched_sid>
+    <same_srcip />
+    <description>Web content discovery: many sensitive-path requests from $(srcip)</description>
+    <mitre><id>T1595.003</id></mitre>
+    <group>recon,soc_correlation,</group>
+  </rule>
+
+  <!-- SOC-WEB-008 -->
+  <rule id="100164" level="5">
+    <if_group>accesslog</if_group>
+    <protocol type="pcre2">^(TRACE|TRACK|DEBUG|PROPFIND|PROPPATCH|MKCOL|COPY|MOVE|LOCK|UNLOCK|CONNECT|SEARCH)$</protocol>
+    <description>Unusual HTTP method $(protocol) from $(srcip)</description>
+    <mitre><id>T1595.002</id></mitre>
+    <group>recon,</group>
+  </rule>
+
+  <!-- SOC-WEB-009 -->
+  <rule id="100175" level="6">
+    <if_group>nginx</if_group>
+    <match>access forbidden by rule</match>
+    <regex type="pcre2">request: "\S+ /\.(git|env|svn|hg|htpasswd|aws|ssh)</regex>
+    <description>Nginx blocked access to a hidden repository/secret file for $(srcip)</description>
+    <mitre><id>T1595.003</id></mitre>
+    <group>recon,</group>
+  </rule>
+
+</group>
+
+<!-- ===================================================================== -->
+<!-- Security configuration changes (Windows)                               -->
+<!-- ===================================================================== -->
+<group name="soc_lab,soc_config,">
+
+  <!-- SOC-CONF-001 -->
+  <rule id="100190" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.providerName" type="pcre2">^(Microsoft-Windows-Eventlog|Eventlog)$</field>
+    <field name="win.system.eventID" type="pcre2">^(1102|104)$</field>
+    <description>Windows event log cleared on $(win.system.computer)</description>
+    <mitre><id>T1070.001</id></mitre>
+  </rule>
+
+  <!-- SOC-CONF-002 -->
+  <rule id="100191" level="10">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Security$</field>
+    <field name="win.system.eventID">^4719$</field>
+    <field name="win.eventdata.auditPolicyChanges" type="pcre2">(?i)removed|%%8448|%%8450</field>
+    <description>Windows audit policy weakened (auditing removed) on $(win.system.computer)</description>
+    <mitre><id>T1562.002</id></mitre>
+  </rule>
+
+  <!-- SOC-CONF-003 -->
+  <rule id="100192" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.channel">^Microsoft-Windows-Windows Defender/Operational$</field>
+    <field name="win.system.eventID" type="pcre2">^(5001|5010|5012)$</field>
+    <description>Microsoft Defender protection disabled on $(win.system.computer)</description>
+    <mitre><id>T1562.001</id></mitre>
+  </rule>
+
+</group>

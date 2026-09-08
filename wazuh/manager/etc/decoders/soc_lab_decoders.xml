@@ -1,0 +1,27 @@
+<!--
+  SOC & SIEM Security Monitoring Lab - custom decoders.
+  The stock Wazuh ruleset has no decoder for shadow-utils `usermod` group
+  changes, and the lab pipeline heartbeat needs structured fields.
+-->
+
+<!-- usermod[1234]: add 'svc-backup' to group 'sudo' -->
+<decoder name="soc-usermod">
+  <program_name>^usermod$</program_name>
+</decoder>
+
+<decoder name="soc-usermod-group-add">
+  <parent>soc-usermod</parent>
+  <regex>^add '(\S+)' to group '(\S+)'</regex>
+  <order>dstuser, group</order>
+</decoder>
+
+<!-- soc-lab-heartbeat: nonce=<id> host=<lab host>  (scripts/health-check.sh) -->
+<decoder name="soc-lab-heartbeat">
+  <program_name>^soc-lab-heartbeat$</program_name>
+</decoder>
+
+<decoder name="soc-lab-heartbeat-fields">
+  <parent>soc-lab-heartbeat</parent>
+  <regex>^nonce=(\S+) host=(\S+)</regex>
+  <order>nonce, lab_host</order>
+</decoder>
