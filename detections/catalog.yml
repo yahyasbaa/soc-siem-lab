@@ -1,0 +1,591 @@
+# SOC & SIEM Security Monitoring Lab - detection catalog (source of truth)
+#
+# Every Wazuh rule in wazuh/manager/etc/rules/soc_lab_rules.xml is described
+# here. tests/detection/test_catalog.py enforces that:
+#   * rule_id / level / MITRE ids match the XML exactly
+#   * every detection has at least one positive fixture (tests:) and every
+#     fixture listed exists and expects this rule
+#   * every mandatory metadata field is present
+# docs/detection-catalog.md and docs/mitre-mapping.md are generated from this
+# file by scripts/build_docs.py (make docs).
+#
+# Severity is derived from the Wazuh level:
+#   0-6 low | 7-11 medium | 12-14 high | 15 critical
+
+severity_scale:
+  low: "0-6"
+  medium: "7-11"
+  high: "12-14"
+  critical: "15"
+
+pipeline_rules:
+  - rule_id: "100090"
+    name: Pipeline heartbeat (agents)
+    purpose: scripts/health-check.sh writes a nonce on every lab host and waits for this alert in the indexer.
+  - rule_id: "100091"
+    name: Pipeline heartbeat (real Nginx request)
+    purpose: health-check requests /soc-lab-heartbeat on the real Nginx server and waits for the access-log alert.
+
+detections:
+
+  # ------------------------------------------------------------ AUTHENTICATION
+  - id: SOC-AUTH-001
+    rule_id: "100100"
+    name: SSH authentication failure
+    description: A single failed SSH password/public-key login or an attempt for a non-existent user.
+    level: 5
+    data_source: Linux auth log (sshd) - lab-linux-01:/var/log/lab/auth.log
+    detection_logic: Child of any stock sshd rule (if_group sshd) whose message contains "Failed password", "Failed publickey", "Invalid user" or "authentication failure".
+    mitre:
+      - {id: T1110.001, name: "Brute Force: Password Guessing", tactic: Credential Access}
+    false_positives: Users mistyping passwords; expired credentials in scripts. Low severity by design - it feeds the correlation rules.
+    response: No action on a single event; review if it repeats for one account or source.
+    playbook: IR-001
+    tests: [auth_ssh_bruteforce]
+    negative_tests: []
+
+  - id: SOC-AUTH-002
+    rule_id: "100101"
+    name: SSH brute force
+    description: Five or more SSH authentication failures from the same source IP within 120 seconds.
+    level: 10
+    data_source: Linux auth log (sshd)
+    detection_logic: frequency=5, timeframe=120s, if_matched_sid 100100, same_srcip.
+    mitre:
+      - {id: T1110.001, name: "Brute Force: Password Guessing", tactic: Credential Access}
+    false_positives: Misconfigured automation retrying with an old password; vulnerability scanners run by the security team.
+    response: Identify targeted accounts, check for any success from the source (SOC-AUTH-003), block the source at the perimeter, enforce key-only SSH.
+    playbook: IR-001
+    tests: [auth_ssh_bruteforce, auth_ssh_success_after_failures]
+    negative_tests: [neg_ssh_single_failure]
+
+  - id: SOC-AUTH-003
+    rule_id: "100102"
+    name: SSH login after brute force
+    description: A successful SSH login from a source that triggered the brute-force rule in the previous 10 minutes.
+    level: 13
+    data_source: Linux auth log (sshd)
+    detection_logic: if_group sshd + "Accepted ..." message, if_matched_sid 100101, same_srcip, timeframe=600s.
+    mitre:
+      - {id: T1110, name: Brute Force, tactic: Credential Access}
+      - {id: T1078, name: Valid Accounts, tactic: Initial Access}
+    false_positives: A legitimate user who mistyped several times and then succeeded from the same IP. Confirm with the user out-of-band.
+    response: Treat as account compromise until disproven - disable the account, kill sessions, review commands executed, rotate credentials.
+    playbook: IR-001
+    tests: [auth_ssh_success_after_failures]
+    negative_tests: [neg_ssh_single_failure]
+
+  - id: SOC-AUTH-004
+    rule_id: "100110"
+    name: Windows logon failure
+    description: Windows Security event 4625 (an account failed to log on).
+    level: 5
+    data_source: Windows Security event log (EventChannel) - lab-win-01
+    detection_logic: if_group windows, channel Security, eventID 4625.
+    mitre:
+      - {id: T1110, name: Brute Force, tactic: Credential Access}
+    false_positives: Mistyped passwords, stale mapped-drive credentials, services with expired passwords.
+    response: Informational; feeds SOC-AUTH-005.
+    playbook: IR-001
+    tests: [auth_windows_logon_failures]
+    negative_tests: []
+
+  - id: SOC-AUTH-005
+    rule_id: "100111"
+    name: Multiple Windows logon failures
+    description: Four or more 4625 failures from the same source IP within 120 seconds.
+    level: 10
+    data_source: Windows Security event log
+    detection_logic: frequency=4, timeframe=120s, if_matched_sid 100110, same_field win.eventdata.ipAddress.
+    mitre:
+      - {id: T1110, name: Brute Force, tactic: Credential Access}
+    false_positives: Service account with a changed password still configured on a server; account lockout tests.
+    response: Identify target accounts and logon type, check lockouts and any later 4624 from the same IP, block the source.
+    playbook: IR-001
+    tests: [auth_windows_logon_failures, auth_windows_success_after_failures]
+    negative_tests: [neg_windows_single_logon_failure]
+
+  - id: SOC-AUTH-006
+    rule_id: "100112"
+    name: Windows logon after repeated failures
+    description: A successful Windows logon (4624) from a source that triggered SOC-AUTH-005 within 10 minutes.
+    level: 13
+    data_source: Windows Security event log
+    detection_logic: eventID 4624, if_matched_sid 100111, same_field win.eventdata.ipAddress, timeframe=600s.
+    mitre:
+      - {id: T1110, name: Brute Force, tactic: Credential Access}
+      - {id: T1078, name: Valid Accounts, tactic: Initial Access}
+    false_positives: User succeeding after several typos from their own workstation.
+    response: Treat as compromised credentials - disable/reset the account, review the session (4624 LogonId) and subsequent process creation.
+    playbook: IR-001
+    tests: [auth_windows_success_after_failures]
+    negative_tests: [neg_windows_single_logon_failure]
+
+  # ------------------------------------------------------------ PRIVILEGE
+  - id: SOC-PRIV-001
+    rule_id: "100120"
+    name: Root shell via sudo
+    description: A user runs an interactive shell (bash/sh/zsh/su) as root through sudo.
+    level: 10
+    data_source: Linux auth log (sudo)
+    detection_logic: if_group sudo, "USER=root", command matches a shell or su binary.
+    mitre:
+      - {id: T1548.003, name: "Abuse Elevation Control Mechanism: Sudo and Sudo Caching", tactic: Privilege Escalation}
+    false_positives: Administrators using `sudo -i` / `sudo su -` for maintenance. Tune with an allow-list of admin accounts.
+    response: Confirm the user is an authorised administrator and a change ticket exists; otherwise review the session and revoke sudo rights.
+    playbook: IR-002
+    tests: [priv_sudo_root_shell]
+    negative_tests: [neg_sudo_routine_admin]
+
+  - id: SOC-PRIV-002
+    rule_id: "100121"
+    name: Repeated unauthorized sudo
+    description: A user who is not in sudoers attempts sudo three or more times within 5 minutes.
+    level: 10
+    data_source: Linux auth log (sudo)
+    detection_logic: frequency=3, timeframe=300s, if_matched_sid 5405 (user NOT in sudoers), same_srcuser.
+    mitre:
+      - {id: T1548.003, name: "Abuse Elevation Control Mechanism: Sudo and Sudo Caching", tactic: Privilege Escalation}
+    false_positives: New staff whose sudo access has not been provisioned yet.
+    response: Contact the user and their manager; if unexplained, treat the account as compromised and review what it attempted to run.
+    playbook: IR-002
+    tests: [priv_unauthorized_sudo_repeated]
+    negative_tests: []
+
+  - id: SOC-PRIV-003
+    rule_id: "100122"
+    name: SUID/SGID bit set
+    description: auditd records chmod setting the setuid/setgid bit (u+s, g+s, 4755, ...).
+    level: 12
+    data_source: Linux audit log (EXECVE) - lab-linux-01:/var/log/lab/audit.log
+    detection_logic: if_group audit, audit.command chmod, EXECVE argument matching a +s symbolic mode or a 2xxx-7xxx octal mode.
+    mitre:
+      - {id: T1548.001, name: "Abuse Elevation Control Mechanism: Setuid and Setgid", tactic: Privilege Escalation}
+    false_positives: Package installation scripts (normally run by dpkg/rpm, not interactively); deliberate admin changes.
+    response: Identify the file, revert the mode, check file integrity and who (auid) ran the command; hunt for other SUID changes.
+    playbook: IR-002
+    tests: [priv_setuid_chmod]
+    negative_tests: []
+
+  # ------------------------------------------------------------ NEW ADMIN ACCOUNT
+  - id: SOC-PERS-001
+    rule_id: "100180"
+    name: Linux account added to privileged group
+    description: usermod adds an account to sudo, wheel, admin, adm, root, docker or lxd.
+    level: 12
+    data_source: Linux auth log (usermod) - custom decoder soc-usermod
+    detection_logic: decoded_as soc-usermod, group field in the privileged-group list.
+    mitre:
+      - {id: T1098, name: Account Manipulation, tactic: Persistence}
+      - {id: T1136.001, name: "Create Account: Local Account", tactic: Persistence}
+    false_positives: Onboarding of a new administrator through a change request.
+    response: Verify against the change/onboarding record; if unapproved remove the membership, lock the account and investigate who ran usermod.
+    playbook: IR-002
+    tests: [persist_linux_user_added_to_sudo]
+    negative_tests: [neg_linux_user_regular_group]
+
+  - id: SOC-PERS-002
+    rule_id: "100182"
+    name: Windows account added to privileged group
+    description: A member is added to BUILTIN\Administrators or Domain/Enterprise/Schema Admins (4732/4728/4756).
+    level: 12
+    data_source: Windows Security event log
+    detection_logic: eventID 4732|4728|4756 and targetSid S-1-5-32-544 or a RID 512/518/519 group.
+    mitre:
+      - {id: T1098, name: Account Manipulation, tactic: Persistence}
+    false_positives: Approved administrator onboarding.
+    response: Validate with the change record; otherwise remove the membership, disable the added account, investigate the subject account.
+    playbook: IR-002
+    tests: [persist_windows_admin_account]
+    negative_tests: []
+
+  - id: SOC-PERS-003
+    rule_id: "100183"
+    name: New Windows local account
+    description: Windows Security event 4720 (a user account was created).
+    level: 8
+    data_source: Windows Security event log
+    detection_logic: eventID 4720 on the Security channel.
+    mitre:
+      - {id: T1136.001, name: "Create Account: Local Account", tactic: Persistence}
+    false_positives: Normal provisioning by IT.
+    response: Confirm the account is expected; correlate with SOC-PERS-002 for privilege grants.
+    playbook: IR-002
+    tests: [persist_windows_admin_account]
+    negative_tests: []
+
+  # ------------------------------------------------------------ POWERSHELL
+  - id: SOC-PS-001
+    rule_id: "100130"
+    name: PowerShell download cradle
+    description: Script block logging shows IEX/Invoke-Expression combined with a download primitive (Net.WebClient, Invoke-WebRequest, ...).
+    level: 12
+    data_source: Microsoft-Windows-PowerShell/Operational 4104 (script block logging)
+    detection_logic: if_group powershell, eventID 4104, scriptBlockText contains both an execution (IEX) and a download primitive.
+    mitre:
+      - {id: T1059.001, name: "Command and Scripting Interpreter: PowerShell", tactic: Execution}
+      - {id: T1105, name: Ingress Tool Transfer, tactic: Command and Control}
+    false_positives: Installers that bootstrap with `iex (irm ...)` (e.g. package managers). Allow-list known URLs.
+    response: Retrieve the full script block and URL, block the domain/IP, isolate the host if the payload executed, collect the downloaded content.
+    playbook: IR-004
+    tests: [powershell_download_cradle]
+    negative_tests: [neg_powershell_scriptblock_benign]
+
+  - id: SOC-PS-002
+    rule_id: "100131"
+    name: Hidden / encoded PowerShell
+    description: powershell.exe started with an encoded command and/or a hidden window (Sysmon event 1).
+    level: 12
+    data_source: Microsoft-Windows-Sysmon/Operational event 1 (process creation)
+    detection_logic: Sysmon EID 1, image powershell.exe/pwsh.exe, command line with -e/-enc/-EncodedCommand <base64> or -w hidden.
+    mitre:
+      - {id: T1059.001, name: "Command and Scripting Interpreter: PowerShell", tactic: Execution}
+      - {id: T1027, name: Obfuscated Files or Information, tactic: Defense Evasion}
+    false_positives: Some management agents (SCCM, RMM tools) launch encoded PowerShell. Allow-list by parent image and signer.
+    response: Decode the command (base64 UTF-16LE), review parent process and user, isolate if malicious.
+    playbook: IR-004
+    tests: [powershell_encoded_hidden]
+    negative_tests: [neg_powershell_process_benign]
+
+  - id: SOC-PS-003
+    rule_id: "100132"
+    name: PowerShell Defender/AMSI tampering
+    description: Script block disables Defender protections, adds exclusions or references AMSI bypass primitives.
+    level: 14
+    data_source: Microsoft-Windows-PowerShell/Operational 4104
+    detection_logic: eventID 4104, scriptBlockText matches Set-MpPreference -Disable*, Add-MpPreference -Exclusion*, AmsiUtils or amsiInitFailed.
+    mitre:
+      - {id: T1562.001, name: "Impair Defenses: Disable or Modify Tools", tactic: Defense Evasion}
+      - {id: T1059.001, name: "Command and Scripting Interpreter: PowerShell", tactic: Execution}
+    false_positives: Very rare; possible during sanctioned AV troubleshooting.
+    response: Re-enable protection, isolate the host, investigate what ran after protections were disabled.
+    playbook: IR-007
+    tests: [powershell_defender_tamper]
+    negative_tests: [neg_powershell_scriptblock_benign]
+
+  # ------------------------------------------------------------ PROCESS EXECUTION
+  - id: SOC-PROC-001
+    rule_id: "100140"
+    name: LOLBin file download
+    description: certutil or bitsadmin used to download a remote file (Sysmon event 1).
+    level: 12
+    data_source: Microsoft-Windows-Sysmon/Operational event 1
+    detection_logic: image certutil.exe/bitsadmin.exe and command line with -urlcache, -verifyctl, /transfer or /addfile.
+    mitre:
+      - {id: T1105, name: Ingress Tool Transfer, tactic: Command and Control}
+      - {id: T1218, name: System Binary Proxy Execution, tactic: Defense Evasion}
+    false_positives: Rare legitimate certificate-cache maintenance by admins.
+    response: Identify the URL and destination file, quarantine and hash the file, block the URL, check for execution of the file.
+    playbook: IR-006
+    tests: [process_certutil_download]
+    negative_tests: [neg_certutil_hashfile, neg_process_notepad]
+
+  - id: SOC-PROC-002
+    rule_id: "100141"
+    name: Office spawns shell
+    description: A Microsoft Office application starts cmd, PowerShell, a script host, mshta, rundll32 or regsvr32.
+    level: 12
+    data_source: Microsoft-Windows-Sysmon/Operational event 1
+    detection_logic: parentImage winword/excel/powerpnt/outlook/msaccess/mspub/onenote and image in the shell/LOLBin list.
+    mitre:
+      - {id: T1204.002, name: "User Execution: Malicious File", tactic: Execution}
+      - {id: T1059.003, name: "Command and Scripting Interpreter: Windows Command Shell", tactic: Execution}
+    false_positives: Legacy macros used by business processes. Inventory and sign them.
+    response: Retrieve the document, isolate the host, review child process tree and network connections, notify the user.
+    playbook: IR-006
+    tests: [process_office_spawns_shell]
+    negative_tests: [neg_process_notepad, neg_powershell_process_benign]
+
+  - id: SOC-PROC-003
+    rule_id: "100142"
+    name: Netcat reverse/bind shell
+    description: auditd records netcat executed with -e or -c (spawn a program on connect).
+    level: 12
+    data_source: Linux audit log (EXECVE)
+    detection_logic: audit.command nc/ncat/netcat and an EXECVE argument -e/-c.
+    mitre:
+      - {id: T1059.004, name: "Command and Scripting Interpreter: Unix Shell", tactic: Execution}
+    false_positives: Almost none on servers; possible in admin troubleshooting labs.
+    response: Kill the process, isolate the host, identify the parent (often a web server account), look for the initial exploit.
+    playbook: IR-006
+    tests: [process_linux_netcat_shell]
+    negative_tests: []
+
+  # ------------------------------------------------------------ NETWORK RECON
+  - id: SOC-NET-001
+    rule_id: "100150"
+    name: Network scan signature
+    description: Suricata raised an "ET SCAN" signature.
+    level: 8
+    data_source: Suricata EVE JSON (lab-nids-01:/var/log/lab/suricata/eve.json)
+    detection_logic: if_group suricata, event_type alert, alert.signature starts with "ET SCAN ".
+    mitre:
+      - {id: T1046, name: Network Service Discovery, tactic: Discovery}
+    false_positives: Authorised vulnerability scanners and asset-discovery tools.
+    response: Check whether the source is an approved scanner; otherwise watch for follow-up exploitation from the same source.
+    playbook: IR-005
+    tests: [network_scan_suricata]
+    negative_tests: [neg_suricata_policy_alert]
+
+  - id: SOC-NET-002
+    rule_id: "100151"
+    name: Port scan (correlated)
+    description: Four or more Suricata scan alerts from the same source within 120 seconds.
+    level: 12
+    data_source: Suricata EVE JSON
+    detection_logic: frequency=4, timeframe=120s, if_matched_sid 100150, same_field src_ip.
+    mitre:
+      - {id: T1046, name: Network Service Discovery, tactic: Discovery}
+    false_positives: Scheduled authorised scans - suppress by source during approved windows.
+    response: Identify scanned hosts/ports, block the source, verify no exposed service was exploited afterwards.
+    playbook: IR-005
+    tests: [network_scan_suricata]
+    negative_tests: [neg_suricata_policy_alert]
+
+  # ------------------------------------------------------------ OUTBOUND
+  - id: SOC-OUT-001
+    rule_id: "100200"
+    name: Script host outbound on non-standard port
+    description: PowerShell or another script/LOLBin process opens an outbound connection to a public IP on a port other than 80/443/53/8080/8443.
+    level: 12
+    data_source: Microsoft-Windows-Sysmon/Operational event 3 (network connection)
+    detection_logic: Sysmon EID 3, initiated=true, image in the script-host list, destinationPort not standard, destinationIp not RFC1918/loopback.
+    mitre:
+      - {id: T1571, name: Non-Standard Port, tactic: Command and Control}
+      - {id: T1059.001, name: "Command and Scripting Interpreter: PowerShell", tactic: Execution}
+    false_positives: Admin scripts talking to internal-but-public-addressed services on custom ports.
+    response: Identify the destination, block it, capture the process tree and memory, isolate the host if C2 is suspected.
+    playbook: IR-006
+    tests: [outbound_powershell_nonstandard_port]
+    negative_tests: [neg_outbound_browser_https]
+
+  - id: SOC-OUT-002
+    rule_id: "100201"
+    name: Outbound C2 signature
+    description: Suricata MALWARE/CNC/TROJAN signature on traffic originating from an internal host.
+    level: 12
+    data_source: Suricata EVE JSON
+    detection_logic: event_type alert, signature prefix ET MALWARE|CNC|TROJAN|ATTACK_RESPONSE, src_ip in RFC1918.
+    mitre:
+      - {id: T1071.001, name: "Application Layer Protocol: Web Protocols", tactic: Command and Control}
+    false_positives: Signature false positives on CDN traffic; verify the payload/JA3.
+    response: Isolate the internal host, block the destination, collect memory and disk triage.
+    playbook: IR-006
+    tests: [outbound_suricata_c2]
+    negative_tests: [neg_suricata_policy_alert]
+
+  # ------------------------------------------------------------ WEB
+  - id: SOC-WEB-001
+    rule_id: "100160"
+    name: Sensitive path request
+    description: Request for a well-known sensitive file or admin path (.env, .git, wp-admin, phpmyadmin, backups...).
+    level: 6
+    data_source: Nginx access log (lab-web-01)
+    detection_logic: if_group accesslog, URL matches the sensitive-path list.
+    mitre:
+      - {id: T1595.003, name: "Active Scanning: Wordlist Scanning", tactic: Reconnaissance}
+    false_positives: Administrators browsing admin panels; security scanners.
+    response: Verify the response codes - any 200 on a secret file is an exposure incident. Feeds SOC-WEB-001b.
+    playbook: IR-003
+    tests: [web_recon_sensitive_paths]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-001b
+    rule_id: "100161"
+    name: Web content discovery
+    description: Six or more sensitive-path requests from one source within 60 seconds.
+    level: 10
+    data_source: Nginx access log
+    detection_logic: frequency=6, timeframe=60s, if_matched_sid 100160, same_srcip.
+    mitre:
+      - {id: T1595.003, name: "Active Scanning: Wordlist Scanning", tactic: Reconnaissance}
+    false_positives: Authorised DAST scans.
+    response: Rate-limit/block the source, review all URLs that returned 2xx, check for secret exposure.
+    playbook: IR-003
+    tests: [web_recon_sensitive_paths]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-002
+    rule_id: "100162"
+    name: Scanner user agent
+    description: User-Agent of a known scanner (sqlmap, nikto, nuclei, gobuster, wpscan, ...).
+    level: 8
+    data_source: Nginx access log
+    detection_logic: if_group accesslog, last quoted field (User-Agent) contains a scanner name.
+    mitre:
+      - {id: T1595.002, name: "Active Scanning: Vulnerability Scanning", tactic: Reconnaissance}
+    false_positives: Internal security testing.
+    response: Confirm whether the scan is authorised; block the source if not and review its other requests.
+    playbook: IR-003
+    tests: [web_scanner_user_agent]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-003
+    rule_id: "100163"
+    name: Path traversal / LFI
+    description: URL tries to escape the web root or read OS files (../, %2e%2e, /etc/passwd, win.ini).
+    level: 10
+    data_source: Nginx access log
+    detection_logic: if_group accesslog, URL matches traversal sequences or sensitive OS file paths.
+    mitre:
+      - {id: T1190, name: Exploit Public-Facing Application, tactic: Initial Access}
+      - {id: T1083, name: File and Directory Discovery, tactic: Discovery}
+    false_positives: Rare; some apps legitimately pass relative paths in parameters.
+    response: Check the response status/size; if 200 assume file disclosure and rotate exposed secrets.
+    playbook: IR-003
+    tests: [web_path_traversal]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-004
+    rule_id: "100170"
+    name: SQL injection
+    description: SQL injection syntax in the URL (UNION SELECT, ' OR 1=1, information_schema, sleep(), xp_cmdshell).
+    level: 12
+    data_source: Nginx access log
+    detection_logic: if_group accesslog, URL matches SQLi patterns (raw and URL-encoded).
+    mitre:
+      - {id: T1190, name: Exploit Public-Facing Application, tactic: Initial Access}
+    false_positives: Search boxes containing SQL keywords; developer tooling.
+    response: Check the application/database logs for errors or data returned, block the source, patch the vulnerable parameter.
+    playbook: IR-003
+    tests: [web_sql_injection]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-005
+    rule_id: "100171"
+    name: Cross-site scripting
+    description: XSS payloads in the URL (<script>, javascript:, onerror=, document.cookie).
+    level: 10
+    data_source: Nginx access log
+    detection_logic: if_group accesslog, URL matches XSS patterns (raw and URL-encoded).
+    mitre:
+      - {id: T1190, name: Exploit Public-Facing Application, tactic: Initial Access}
+      - {id: T1059.007, name: "Command and Scripting Interpreter: JavaScript", tactic: Execution}
+    false_positives: CMS editors posting HTML; marketing tracking parameters.
+    response: Verify output encoding on the affected page, check whether the payload is stored, block the source.
+    playbook: IR-003
+    tests: [web_xss]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-006
+    rule_id: "100172"
+    name: OS command injection
+    description: Shell metacharacters followed by a command (;cat, |id, $(whoami), `uname`) in the URL.
+    level: 12
+    data_source: Nginx access log
+    detection_logic: if_group accesslog, URL matches separator + common command.
+    mitre:
+      - {id: T1190, name: Exploit Public-Facing Application, tactic: Initial Access}
+      - {id: T1059.004, name: "Command and Scripting Interpreter: Unix Shell", tactic: Execution}
+    false_positives: Very rare in normal traffic.
+    response: Check for spawned processes on the web host (auditd), isolate if executed, patch the endpoint.
+    playbook: IR-003
+    tests: [web_command_injection]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-007
+    rule_id: "100173"
+    name: Log4Shell JNDI injection
+    description: ${jndi:...} lookup strings (including common obfuscations) anywhere in the request line or User-Agent.
+    level: 14
+    data_source: Nginx access log
+    detection_logic: "if_group accesslog, full log matches ${jndi: / ${${lower:j} / ${${::-j}."
+    mitre:
+      - {id: T1190, name: Exploit Public-Facing Application, tactic: Initial Access}
+    false_positives: Security scanners checking for CVE-2021-44228.
+    response: Verify no Java service behind the proxy is vulnerable, look for outbound LDAP/RMI from servers, block the callback host.
+    playbook: IR-003
+    tests: [web_log4shell_jndi]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-008
+    rule_id: "100164"
+    name: Unusual HTTP method
+    description: TRACE, TRACK, DEBUG, WebDAV or CONNECT methods against the web server.
+    level: 5
+    data_source: Nginx access log
+    detection_logic: if_group accesslog, decoded HTTP method in the unusual-method list.
+    mitre:
+      - {id: T1595.002, name: "Active Scanning: Vulnerability Scanning", tactic: Reconnaissance}
+    false_positives: WebDAV clients where WebDAV is in use.
+    response: Low priority; correlate with other activity from the same source.
+    playbook: IR-003
+    tests: [web_unusual_http_method]
+    negative_tests: [neg_web_normal_browsing]
+
+  - id: SOC-WEB-009
+    rule_id: "100175"
+    name: Blocked hidden-file access (Nginx error log)
+    description: Nginx error log reports "access forbidden by rule" for .git/.env/.svn/.htpasswd/.aws/.ssh.
+    level: 6
+    data_source: Nginx error log (lab-web-01)
+    detection_logic: if_group nginx, message "access forbidden by rule", request path is a hidden secret/repository file.
+    mitre:
+      - {id: T1595.003, name: "Active Scanning: Wordlist Scanning", tactic: Reconnaissance}
+    false_positives: Developers testing deny rules.
+    response: Confirms the deny rule works; correlate with SOC-WEB-001 for the same source.
+    playbook: IR-003
+    tests: [web_forbidden_hidden_file]
+    negative_tests: [neg_web_normal_browsing]
+
+  # ------------------------------------------------------------ SECURITY CONFIGURATION CHANGES
+  - id: SOC-CONF-001
+    rule_id: "100190"
+    name: Windows event log cleared
+    description: Security log cleared (1102) or System log cleared (104).
+    level: 12
+    data_source: Windows Security/System event log
+    detection_logic: provider Microsoft-Windows-Eventlog, eventID 1102 or 104.
+    mitre:
+      - {id: T1070.001, name: "Indicator Removal: Clear Windows Event Logs", tactic: Defense Evasion}
+    false_positives: Rare, documented maintenance.
+    response: Rely on forwarded copies in the SIEM, identify the subject account, investigate activity before the clear.
+    playbook: IR-007
+    tests: [config_windows_log_cleared]
+    negative_tests: []
+
+  - id: SOC-CONF-002
+    rule_id: "100191"
+    name: Windows audit policy weakened
+    description: Event 4719 where success or failure auditing was removed.
+    level: 10
+    data_source: Windows Security event log
+    detection_logic: eventID 4719 and auditPolicyChanges "removed" (%%8448 / %%8450).
+    mitre:
+      - {id: T1562.002, name: "Impair Defenses: Disable Windows Event Logging", tactic: Defense Evasion}
+    false_positives: GPO changes rolled out by administrators.
+    response: Compare with GPO change records, restore the audit policy, review the subject account.
+    playbook: IR-007
+    tests: [config_windows_audit_policy_change]
+    negative_tests: []
+
+  - id: SOC-CONF-003
+    rule_id: "100192"
+    name: Defender protection disabled
+    description: Microsoft Defender reports real-time protection or scanning disabled (5001/5010/5012).
+    level: 12
+    data_source: Microsoft-Windows-Windows Defender/Operational
+    detection_logic: Defender channel, eventID 5001|5010|5012.
+    mitre:
+      - {id: T1562.001, name: "Impair Defenses: Disable or Modify Tools", tactic: Defense Evasion}
+    false_positives: Third-party AV taking over; sanctioned troubleshooting.
+    response: Re-enable protection, find the process/user that changed it, scan the host.
+    playbook: IR-007
+    tests: [config_defender_realtime_disabled]
+    negative_tests: []
+
+  - id: SOC-CONF-004
+    rule_id: "100193"
+    name: Linux security control disabled
+    description: sudo used to disable the firewall, SELinux, auditd, AppArmor, rsyslog, Suricata or the Wazuh agent.
+    level: 12
+    data_source: Linux auth log (sudo)
+    detection_logic: if_group sudo, command matches ufw disable, setenforce 0, iptables -F, auditctl -D/-e 0, systemctl stop|disable|mask <security service>.
+    mitre:
+      - {id: T1562.001, name: "Impair Defenses: Disable or Modify Tools", tactic: Defense Evasion}
+      - {id: T1562.004, name: "Impair Defenses: Disable or Modify System Firewall", tactic: Defense Evasion}
+    false_positives: Planned maintenance windows.
+    response: Re-enable the control, confirm a change ticket, review commands run while the control was off.
+    playbook: IR-007
+    tests: [config_linux_security_disabled]
+    negative_tests: [neg_sudo_routine_admin]
