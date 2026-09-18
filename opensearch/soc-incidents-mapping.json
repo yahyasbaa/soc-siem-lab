@@ -1,0 +1,37 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "incident_id":     {"type": "keyword"},
+      "title":           {"type": "keyword"},
+      "status":          {"type": "keyword"},
+      "severity":        {"type": "keyword"},
+      "level":           {"type": "integer"},
+      "playbook":        {"type": "keyword"},
+      "rule_id":         {"type": "keyword"},
+      "rule_description":{"type": "text"},
+      "mitre_ids":       {"type": "keyword"},
+      "mitre_tactics":   {"type": "keyword"},
+      "source_alert_id": {"type": "keyword"},
+      "source_ips":      {"type": "keyword"},
+      "users":           {"type": "keyword"},
+      "hosts":           {"type": "keyword"},
+      "related_alerts":  {"type": "integer"},
+      "related_events":  {"type": "integer"},
+      "first_seen":      {"type": "date"},
+      "last_seen":       {"type": "date"},
+      "created_at":      {"type": "date"},
+      "updated_at":      {"type": "date"},
+      "closed_at":       {"type": "date"},
+      "analyst":         {"type": "keyword"},
+      "resolution":      {"type": "text"},
+      "summary":         {"type": "text"},
+      "evidence_path":   {"type": "keyword"},
+      "evidence_sha256": {"type": "keyword"}
+    }
+  }
+}

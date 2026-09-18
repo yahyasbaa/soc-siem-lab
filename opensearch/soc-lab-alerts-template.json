@@ -1,0 +1,29 @@
+{
+  "_comment": "Legacy index template merged on top of the stock 'wazuh' template. Declares the dynamic fields the SOC dashboards aggregate on (Suricata EVE, custom decoders) so they exist in the mapping before the first such event arrives.",
+  "index_patterns": ["wazuh-alerts-4.x-*", "wazuh-archives-4.x-*"],
+  "order": 10,
+  "mappings": {
+    "properties": {
+      "data": {
+        "properties": {
+          "src_ip":    {"type": "keyword"},
+          "dest_ip":   {"type": "keyword"},
+          "src_port":  {"type": "keyword"},
+          "dest_port": {"type": "keyword"},
+          "event_type":{"type": "keyword"},
+          "alert": {
+            "properties": {
+              "signature":    {"type": "keyword"},
+              "signature_id": {"type": "keyword"},
+              "category":     {"type": "keyword"},
+              "severity":     {"type": "keyword"}
+            }
+          },
+          "group":    {"type": "keyword"},
+          "nonce":    {"type": "keyword"},
+          "lab_host": {"type": "keyword"}
+        }
+      }
+    }
+  }
+}
